@@ -65,28 +65,78 @@
     {
       "id": "iphone",
       "label": "iPhone"
-    }
-  ],
-  "menu": [
-    {
-      "id": "settings",
-      "label": "Settings"
-    },
-    {
-      "id": "internet",
-      "label": "Internet"
-    },
-    {
-      "id": "sources",
-      "label": "Sources"
     },
     {
       "id": "apps",
       "label": "All apps"
+    }
+  ],
+  "menu": [
+    {
+      "id": "look",
+      "label": "Change look",
+      "group": "hub"
+    },
+    {
+      "id": "sleep",
+      "label": "Sleep timer",
+      "group": "hub"
+    },
+    {
+      "id": "about",
+      "label": "About",
+      "group": "hub"
+    },
+    {
+      "id": "settings",
+      "label": "Settings",
+      "group": "samsung"
+    },
+    {
+      "id": "sources",
+      "label": "Sources",
+      "group": "samsung"
+    },
+    {
+      "id": "internet",
+      "label": "Internet",
+      "group": "samsung"
     },
     {
       "id": "samsung",
-      "label": "Samsung Home"
+      "label": "Samsung Home",
+      "group": "samsung"
     }
-  ]
+  ],
+  "idleSeconds": 20,
+  "nameLv": "Ričard",
+  "language": "en",
+  "watchFace": "gold",
+  "night": {
+    "enabled": true,
+    "from": "22:00",
+    "to": "07:00"
+  },
+  "nameDays": true,
+  "screens": [
+    {
+      "id": "calendar"
+    },
+    {
+      "id": "weather"
+    },
+    {
+      "id": "daylight"
+    },
+    {
+      "id": "apps"
+    },
+    {
+      "id": "idle"
+    },
+    {
+      "id": "night"
+    }
+  ],
+  "language2": "none"
 }

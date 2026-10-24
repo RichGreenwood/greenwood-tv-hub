@@ -7,44 +7,60 @@
 </head>
 <body>
 <div id="stage" class="stage">
-  <div class="edge" id="edge"><span class="edge-arrow">&#8250;</span><span class="edge-text">MENU</span></div>
+  <div class="edge" id="edge"><span class="edge-arrow">&#8250;</span><span class="edge-text" data-i18n="menuTab">MENU</span></div>
+
+  <div class="edge edge-r" id="edge-r"><span class="edge-arrow">&#8249;</span><span class="edge-text" data-i18n="screensTab">SCREENS</span></div>
 
   <img class="logo" src="img/greenwood-logo-gold.png" alt="Greenwood Media">
 
   <div class="greet">
     <div id="greeting">Hello,</div>
     <div class="name" id="name"></div>
+    <div class="greet2" id="greeting2"></div>
+    <div class="nameday" id="nameday"></div>
   </div>
 
   <div class="info">
-    <svg class="cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.6 4.2 4.2 0 0 0 7 18z"/></svg>
+    <span class="cloud" id="wx-icon"></span>
     <div class="info-text">
       <div class="date" id="date"></div>
+      <div class="date2" id="date2"></div>
       <div class="weather" id="weather"></div>
+      <div class="sleep-badge" id="sleep-badge" hidden></div>
     </div>
+  </div>
+
+  <!-- Right column: calendar agenda + week strip -->
+  <div class="rcol" id="rcol">
+    <div class="agenda" id="agenda" hidden>
+      <div class="agenda-h" id="agenda-h">TODAY</div>
+      <div id="agenda-list"></div>
+    </div>
+    <div class="week" id="week"></div>
   </div>
 
   <!-- CLK-4 watch: pre-rendered layers, only transforms change at runtime -->
   <div class="watch" id="watch">
-    <img class="w-layer" src="img/watch-dial.png" alt="">
+    <img class="w-layer" src="img/watch-dial.png" data-n="watch-dial" alt="">
     <svg class="w-moon" id="moon" viewBox="0 0 100 100"><defs><radialGradient id="moonLit" cx="42%" cy="38%" r="70%"><stop offset="0%" stop-color="#fff7da"/><stop offset="65%" stop-color="#efcf73"/><stop offset="100%" stop-color="#c39229"/></radialGradient></defs><path id="moon-path" d="" fill="url(#moonLit)"/></svg>
-    <img class="w-small" id="h-day-s" src="img/day-hand-shadow.png" alt="">
-    <img class="w-small" id="h-day" src="img/day-hand.png" alt="">
-    <img class="w-small" id="h-date-s" src="img/date-hand-shadow.png" alt="">
-    <img class="w-small" id="h-date" src="img/date-hand.png" alt="">
-    <img class="w-layer w-hand" id="h-hour-s" src="img/hour-hand-shadow.png" alt="">
-    <img class="w-layer w-hand" id="h-hour" src="img/hour-hand.png" alt="">
-    <img class="w-layer w-hand" id="h-min-s" src="img/minute-hand-shadow.png" alt="">
-    <img class="w-layer w-hand" id="h-min" src="img/minute-hand.png" alt="">
-    <img class="w-layer w-hand" id="h-sec-s" src="img/second-hand-shadow.png" alt="">
-    <img class="w-layer w-hand" id="h-sec" src="img/second-hand.png" alt="">
-    <img class="w-layer" src="img/watch-glass.png" alt="">
+    <img class="w-small" id="h-day-s" src="img/day-hand-shadow.png" data-n="day-hand-shadow" alt="">
+    <img class="w-small" id="h-day" src="img/day-hand.png" data-n="day-hand" alt="">
+    <img class="w-small" id="h-date-s" src="img/date-hand-shadow.png" data-n="date-hand-shadow" alt="">
+    <img class="w-small" id="h-date" src="img/date-hand.png" data-n="date-hand" alt="">
+    <img class="w-layer w-hand" id="h-hour-s" src="img/hour-hand-shadow.png" data-n="hour-hand-shadow" alt="">
+    <img class="w-layer w-hand" id="h-hour" src="img/hour-hand.png" data-n="hour-hand" alt="">
+    <img class="w-layer w-hand" id="h-min-s" src="img/minute-hand-shadow.png" data-n="minute-hand-shadow" alt="">
+    <img class="w-layer w-hand" id="h-min" src="img/minute-hand.png" data-n="minute-hand" alt="">
+    <img class="w-layer w-hand" id="h-sec-s" src="img/second-hand-shadow.png" data-n="second-hand-shadow" alt="">
+    <img class="w-layer w-hand" id="h-sec" src="img/second-hand.png" data-n="second-hand" alt="">
+    <img class="w-layer" src="img/watch-glass.png" data-n="watch-glass" alt="">
+    <div class="digital" id="digital"><div class="dg-time" id="dg-time"></div><div class="dg-day" id="dg-day"></div></div>
   </div>
 
   <div class="rows">
-    <div class="label">WATCH</div>
+    <div class="label" data-i18n="watchRow" data-bi="1">WATCH</div>
     <div class="row" id="row-watch"></div>
-    <div class="label label-gap">CONNECT</div>
+    <div class="label label-gap" data-i18n="connectRow" data-bi="1">CONNECT</div>
     <div class="row" id="row-connect"></div>
   </div>
 
@@ -53,26 +69,73 @@
     <div class="drawer">
       <img class="drawer-logo" src="img/greenwood-logo-gold.png" alt="Greenwood Media">
       <div id="menu"></div>
-      <div class="drawer-hint">Back or &#9654; closes the menu</div>
+      <div class="drawer-hint" data-i18n="drawerHint">Back or &#9654; closes the menu</div>
+    </div>
+  </div>
+
+  <div class="rdrawer-wrap" id="rdrawer" hidden>
+    <div class="drawer-dim rdrawer-dim"></div>
+    <div class="rdrawer">
+      <div class="rdrawer-title" data-i18n="screensTitle" data-bi="1">Screens</div>
+      <div id="rmenu"></div>
+      <div class="drawer-hint" data-i18n="rdrawerHint">Back or &#9664; closes</div>
     </div>
   </div>
 
   <div class="card-wrap" id="card" hidden>
     <div class="card">
-      <div class="card-title">Show your iPhone on the TV</div>
+      <div class="card-title" data-i18n="cardTitle">Show your iPhone on the TV</div>
       <ol class="card-steps">
-        <li>iPhone and TV on the same Wi-Fi.</li>
-        <li>Open Control Centre on the iPhone.</li>
-        <li>Tap <b>Screen Mirroring</b>.</li>
-        <li>Choose <b id="card-tv">Greenwood TV</b>.</li>
+        <li data-i18n="card1">iPhone and TV on the same Wi-Fi.</li>
+        <li data-i18n="card2">Open Control Centre on the iPhone.</li>
+        <li data-i18n-html="card3">Tap <b>Screen Mirroring</b>.</li>
+        <li><span data-i18n="card4">Choose</span> <b id="card-tv">Greenwood TV</b>.</li>
       </ol>
-      <div class="card-hint">Back closes this card</div>
+      <div class="card-hint" data-i18n="cardHint">Back closes this card</div>
     </div>
+  </div>
+
+  <!-- Idle (I3): watch moves left, this panel appears on the right; night mode dims it -->
+  <div class="idle-info" id="idle-info">
+    <div class="idle-date" id="idle-date"></div>
+    <div class="idle-date2" id="idle-date2"></div>
+    <div class="idle-wx-row"><span class="idle-wx" id="idle-wx"></span><span id="idle-weather"></span></div>
+    <div class="sun" id="sun">
+      <svg id="sun-svg" viewBox="0 0 724 250" width="724" height="250"></svg>
+      <div class="sun-cap" id="sun-cap"></div>
+    </div>
+    <div class="idle-next" id="idle-next"></div>
+  </div>
+  <div class="idle-hint" id="idle-hint" data-i18n="pressAny">Press any key</div>
+  <div class="night-veil" id="night-veil"></div>
+
+  <!-- All apps -->
+  <div class="all-wrap" id="all" hidden>
+    <div class="all-head">
+      <div class="all-title" data-i18n="allApps" data-bi="1">All apps</div>
+      <div class="all-meta"><span id="all-count"></span><span class="all-dot">&middot;</span><span data-i18n="backHome">Back returns home</span></div>
+    </div>
+    <div class="all-view">
+      <div class="all-grid" id="all-grid"></div>
+      <div class="all-empty" id="all-empty" hidden data-i18n="noApps">No apps found.</div>
+    </div>
+    <div class="all-more" id="all-more"></div>
+  </div>
+
+  <!-- Screens: Calendar, Weather, Change look, Sleep timer, About, Calendar setup -->
+  <div class="scr-wrap" id="scr" hidden>
+    <img class="scr-logo" src="img/greenwood-logo-gold.png" alt="">
+    <div class="scr-head">
+      <div class="scr-title" id="scr-title"></div>
+      <div class="scr-meta" data-i18n="backHome">Back returns home</div>
+    </div>
+    <div class="scr-body" id="scr-body"></div>
   </div>
 
   <div class="toast" id="toast"></div>
   <div class="preview-badge" id="badge" hidden>PC preview · click once, then arrows = remote · Enter = OK · Esc = Back</div>
 </div>
+<script src="i18n.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
