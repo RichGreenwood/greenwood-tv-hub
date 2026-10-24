@@ -1,7 +1,8 @@
 /* Greenwood Hub service (runs inside TizenBrew's Node service on the TV).
  *
- * One job: let the hub page send ONE remote key from a fixed allowlist
- * (HDMI 1-3, Menu, Source, Home) to the TV's own remote API.
+ * Two jobs, both from fixed allowlists:
+ *  1. /launch?id=<appId>  open a native app (the hub page has no Tizen API; this service does).
+ *  2. /key?k=KEY_*        send ONE remote key (HDMI 1-3, Menu, Source, Home) to the TV's remote API.
  *
  * - Listens on 127.0.0.1:8095 only (not reachable from the network).
  * - Talks to wss://127.0.0.1:8002 (the TV's own remote API, self-signed cert).
@@ -21,6 +22,14 @@ var PORT = 8095;
 var TOKEN_FILE = '/home/owner/share/greenwoodHubToken.txt';
 var NAME_B64 = new Buffer('Greenwood Hub').toString('base64');
 var ALLOWED = ['KEY_HDMI1', 'KEY_HDMI2', 'KEY_HDMI3', 'KEY_MENU', 'KEY_SOURCE', 'KEY_HOME'];
+var APPS = [ /* native app IDs read from this TV (apps.csv, 24 Oct 2026). Add here when apps.json changes. */
+  '3202301029760', /* HBO Max */
+  '3201907018807', /* Netflix */
+  '3201701011479', /* Tet+ */
+  '111299001912',  /* YouTube */
+  '3201606009684', /* Spotify */
+  'org.tizen.browser' /* Internet */
+];
 var WAIT_MS = 30000; /* time for Ričards to press Allow on first use */
 
 function readToken() {
@@ -116,11 +125,26 @@ function sendKey(key, cb) {
   sock.on('close', function () { finish(upgraded ? 'closed' : 'error'); });
 }
 
+function launch(appId, res) {
+  if (APPS.indexOf(appId) < 0) { res.statusCode = 403; res.end('{"ok":false,"error":"not allowed"}'); return; }
+  if (typeof tizen === 'undefined' || !tizen.application) { res.end('{"ok":false,"error":"no tizen api"}'); return; }
+  try {
+    tizen.application.launch(appId,
+      function () { res.end('{"ok":true}'); },
+      function (e) { res.end(JSON.stringify({ ok: false, error: (e && e.name) ? e.name : 'launch error' })); });
+  } catch (e) {
+    res.end(JSON.stringify({ ok: false, error: (e && e.name) ? e.name : 'launch error' }));
+  }
+}
+
 var busy = false;
 var server = http.createServer(function (req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
-  var m = /^\/key\?k=([A-Z0-9_]+)$/.exec(req.url || '');
+  var url = req.url || '';
+  var la = /^\/launch\?id=([A-Za-z0-9._]+)$/.exec(url);
+  if (req.method === 'GET' && la) { launch(la[1], res); return; }
+  var m = /^\/key\?k=([A-Z0-9_]+)$/.exec(url);
   if (req.method !== 'GET' || !m) { res.statusCode = 404; res.end('{"ok":false,"error":"not found"}'); return; }
   var key = m[1];
   if (ALLOWED.indexOf(key) < 0) { res.statusCode = 403; res.end('{"ok":false,"error":"not allowed"}'); return; }
