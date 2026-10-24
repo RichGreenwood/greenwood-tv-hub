@@ -6,9 +6,13 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.3.0';
+  var VERSION = '0.3.1';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
-  var ON_TV = typeof window.tizen !== 'undefined' && !!window.tizen.application;
+  /* TizenBrew serves the hub from http://127.0.0.1:8081/module/... The Tizen API is not injected
+     into that page, so "on TV" = served by TizenBrew (or Tizen API present). */
+  var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
+  var SERVICE = 'http://127.0.0.1:8095'; /* service.js */
+  var ON_TV = HAS_TIZEN || (location.hostname === '127.0.0.1' && location.port === '8081');
 
   var theme = null;
   var apps = {};
@@ -165,13 +169,37 @@
     var appId = apps[id];
     if (!appId) { toast(label + ': not linked yet'); return; }
     if (!ON_TV) { toast('Preview: would open ' + label); return; }
-    try {
-      window.tizen.application.launch(appId,
-        function () { countLaunch(id); },
-        function (e) { toast(label + ' did not open (' + (e && e.name ? e.name : 'error') + ')'); });
-    } catch (e) {
-      toast(label + ' did not open');
+    if (HAS_TIZEN) {
+      try {
+        window.tizen.application.launch(appId,
+          function () { countLaunch(id); },
+          function (e) { toast(label + ' did not open (' + (e && e.name ? e.name : 'error') + ')'); });
+      } catch (e) { toast(label + ' did not open'); }
+      return;
     }
+    /* No Tizen API in the page: service.js launches it (allowlisted app IDs only). */
+    callService('/launch?id=' + encodeURIComponent(appId), function (r) {
+      if (r.ok) { countLaunch(id); return; }
+      toast(label + ' did not open' + (r.error ? ' (' + r.error + ')' : ''));
+    });
+  }
+
+  /* GET to service.js on 127.0.0.1:8095; cb always gets an object {ok, error}. */
+  function callService(path, cb, timeoutMs) {
+    var x = new XMLHttpRequest();
+    var answered = false;
+    x.open('GET', SERVICE + path, true);
+    x.timeout = timeoutMs || 8000;
+    x.onload = function () {
+      answered = true;
+      var r = {};
+      try { r = JSON.parse(x.responseText); } catch (e) { r = { ok: false, error: 'bad answer' }; }
+      cb(r);
+    };
+    x.ontimeout = x.onerror = function () {
+      if (!answered) { answered = true; cb({ ok: false, error: 'service' }); }
+    };
+    x.send();
   }
 
   function countLaunch(id) {
@@ -183,26 +211,15 @@
   /* Remote keys (HDMI 1-3, Menu, Source, Home): sent by service.js, which talks to the TV's
      own remote API (wss://127.0.0.1:8002). This TV refuses the plain ws:// socket.
      First use shows an "Allow" prompt on the TV for "Greenwood Hub" (Ričards accepts once). */
-  var SERVICE = 'http://127.0.0.1:8095';
   function sendKey(keyCode, label) {
     if (!ON_TV) { toast('Preview: ' + label + ' \u2192 remote key ' + keyCode); return; }
-    var x = new XMLHttpRequest();
-    var answered = false;
-    x.open('GET', SERVICE + '/key?k=' + encodeURIComponent(keyCode), true);
-    x.timeout = 35000; /* covers the one-time "Allow" prompt */
-    x.onload = function () {
-      answered = true;
-      var r = {};
-      try { r = JSON.parse(x.responseText); } catch (e) { r = {}; }
+    callService('/key?k=' + encodeURIComponent(keyCode), function (r) {
       if (r.ok) { return; }
       if (r.error === 'denied') { toast('Not allowed. Accept "Greenwood Hub" on the TV prompt.'); }
       else if (r.error === 'timeout') { toast('No answer. Check for an "Allow" prompt on the TV.'); }
+      else if (r.error === 'service') { toast('Hub service not running. Use the Source button.'); }
       else { toast(label + ': remote key failed. Use the Source button.'); }
-    };
-    x.ontimeout = x.onerror = function () {
-      if (!answered) { answered = true; toast('Hub service not running. Use the Source button.'); }
-    };
-    x.send();
+    }, 35000); /* covers the one-time "Allow" prompt */
   }
 
   function labelOf(id) { var it = findItem(id); return it ? it.label : id; }
