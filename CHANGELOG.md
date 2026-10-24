@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.0 — 2026-10-24
+- Two side panels: left MENU (Change look, Sleep timer, About + Samsung shortcuts), right SCREENS (Calendar, Weather, Daylight, All apps, Idle screen, Night view). Right from the last tile or the right edge tab opens it; Back or Left closes.
+- Calendar: personal + Aerones Google calendars via their secret iCal links (stored only on the TV). Today's meetings on home; week strip Mon-Sun under them (today lit, dot = meetings). Calendar screen shows the next 7 days, days without meetings left out, "+N more" per day. service.js reads Monday of this week to today+7, every 15 min; time zones (incl. clock changes), repeating, moved, cancelled and all-day meetings handled.
+- One-time calendar setup: About -> Connect calendars shows a 6-digit code; the laptop sends the links to port 8096 only while the code is shown (10 min, 5 wrong tries max, Google links only).
+- Languages: English (default), Latviešu, Français. Optional second language shown smaller next to the main one (greeting, date, labels, menus, screens, weather words). Latvian name days (data: slikts/vardadienas, MIT).
+- Daylight: sun path for Rīga — day arc with the sun's current position, dashed night arc with the moon, sunrise/sunset, day length, "Sunset in / Sunrise in". Uses Open-Meteo sunrise/sunset, calculated locally if offline. Shown on the Daylight screen and the idle screen.
+- Idle screen: watch moves left; right panel with date, weather, sun path, next meeting.
+- Night view (Screens) and automatic night mode 22:00-07:00 (theme.json "night"): dimmed watch, date and sun path.
+- Weather screen: 3-day forecast with sunrise and sunset (same Open-Meteo request).
+- Change look: watch face gold / silver / digital, language, second language, guest mode, night mode. Every option is wired and saved on the TV.
+- Guest mode: hides your name and meeting titles ("Busy").
+- Sleep timer: 15/30/60/90/120 min; at the end the helper switches the TV off only if it is still on.
+- About screen: version, helper, remote keys, weather and calendar age, free storage, network.
+
+## 0.4.0 — 2026-10-24
+- New: All apps screen. Every installed app (read live from the TV by service.js, with real icons), Greenwood tile style, 6 per row, most used first, D-pad + Back. Fallback list from apps.json if the live list is not available. Opened from the menu and from the new "All apps" button in CONNECT.
+- New: I3 idle screen. After 20 s without a key on the home screen (theme.json idleSeconds), the watch moves to the centre with date and weather. Any key wakes. Never over video; does not block the TV's auto power off. Also "Idle screen now" in the menu.
+- New: weather icon follows the weather (sun/moon, partly cloudy, cloud, fog, rain, snow, storm).
+- Clock and timers pause while another app is on screen; weather refreshes when you come back.
+- service.js: /apps and /icon (icons only for apps on the TV's own list), launch allowlist = fixed IDs + the TV's own app list.
+- Remote-key messages name the matching remote button as a fallback.
+
+## 0.3.2 — 2026-10-24
+- Remote keys (Settings, Sources, Samsung Home, HDMI): on-screen error now shows the exact cause, e.g. "key failed (closed / ms.channel.connect)".
+- service.js: client name sent like samsungtvws (proven on this TV from the laptop), waits 1 s before closing, retries once if the TV closes the connection (first "Allow"), queues presses instead of refusing them, keeps a short log at 127.0.0.1:8095/log.
+
 ## 0.3.1 — 2026-10-24
 - Fix: on the TV the hub showed "PC preview" and did not open apps. TizenBrew serves the page from 127.0.0.1:8081 without the Tizen API, so the page now detects TizenBrew by its address.
 - App tiles now open apps through service.js (/launch, fixed allowlist of the six app IDs). Tested against a simulated TizenBrew page.
