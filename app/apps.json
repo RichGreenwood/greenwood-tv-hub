@@ -12,5 +12,68 @@
   "hdmi3": "KEY_HDMI3",
   "settings": "KEY_MENU",
   "sources": "KEY_SOURCE",
-  "samsung": "KEY_HOME"
+  "samsung": "KEY_HOME",
+  "_all_note": "Fallback list for the All apps screen when service.js cannot read the live app list. IDs from this TV's app list (apps.csv, 24 Oct 2026).",
+  "_all": [
+    {
+      "id": "3201807016597",
+      "name": "Apple TV"
+    },
+    {
+      "id": "3201806016390",
+      "name": "DAZN"
+    },
+    {
+      "id": "20192100002",
+      "name": "e-Manual"
+    },
+    {
+      "id": "3201710015037",
+      "name": "Gallery"
+    },
+    {
+      "id": "3202204027283",
+      "name": "Go3"
+    },
+    {
+      "id": "3202301029760",
+      "name": "HBO Max"
+    },
+    {
+      "id": "org.tizen.browser",
+      "name": "Internet"
+    },
+    {
+      "id": "3201505002589",
+      "name": "MEGOGO"
+    },
+    {
+      "id": "3201907018807",
+      "name": "Netflix"
+    },
+    {
+      "id": "3201511006428",
+      "name": "Rakuten TV"
+    },
+    {
+      "id": "3201606009684",
+      "name": "Spotify"
+    },
+    {
+      "id": "3201701011479",
+      "name": "Tet+"
+    },
+    {
+      "id": "11111300404",
+      "name": "Viaplay"
+    },
+    {
+      "id": "111299001912",
+      "name": "YouTube"
+    },
+    {
+      "id": "3201909019271",
+      "name": "Privacy Choices"
+    }
+  ]
 }
