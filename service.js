@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.5.1';
+var VERSION = '0.5.2';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
@@ -1013,3 +1013,35 @@ server.on('error', function (e) {
   }).on('error', function () { setTimeout(listenMain, 3000); });
 });
 listenMain();
+
+/* First start of a newly installed version: remove older Greenwood Hub entries from TizenBrew's module list
+   and point autolaunch here if it pointed at an older Greenwood Hub. Other modules are never touched. */
+setTimeout(function () {
+  if (retired) { return; }
+  var c = readTb();
+  if (!c || !c.modules) { return; }
+  var own = -1, newer = false;
+  c.modules.forEach(function (m, i) {
+    if (!MOD_RE.test(m)) { return; }
+    var tag = m.indexOf('@') > 0 ? m.slice(m.indexOf('@') + 1) : '';
+    if (verNum(tag) === verNum(VERSION)) { own = i; }
+    else if (verNum(tag) > verNum(VERSION)) { newer = true; }
+  });
+  if (own < 0 || newer) { return; }
+  var ownName = c.modules[own];
+  var mods = c.modules.filter(function (m) { return !MOD_RE.test(m) || m === ownName; });
+  var auto = c.autoLaunchModule && MOD_RE.test(c.autoLaunchModule) && c.autoLaunchModule !== ownName;
+  if (mods.length === c.modules.length && !auto) { return; }
+  try {
+    fs.writeFileSync(TB_BACKUP, JSON.stringify(c, null, 4));
+    var oldTags = c.modules.filter(function (m) { return MOD_RE.test(m) && m !== ownName; });
+    c.modules = mods;
+    if (auto) { c.autoLaunchModule = ownName; }
+    fs.writeFileSync(TB_CFG + '.tmp', JSON.stringify(c, null, 4));
+    JSON.parse(String(fs.readFileSync(TB_CFG + '.tmp', 'utf8')));
+    fs.renameSync(TB_CFG + '.tmp', TB_CFG);
+    var cfg = readCfg();
+    if (oldTags.length) { var t0 = oldTags[oldTags.length - 1]; cfg.prevTag = t0.slice(t0.indexOf('@') + 1); writeCfg(cfg); }
+    log('tidy: kept ' + ownName + ', removed ' + oldTags.length + ' older entr' + (oldTags.length === 1 ? 'y' : 'ies') + (auto ? ', autolaunch updated' : ''));
+  } catch (e) { log('tidy failed: ' + ((e && e.message) || e)); }
+}, 4000);

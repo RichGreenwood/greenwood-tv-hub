@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2 — 2026-10-24
+- First start of a new version tidies TizenBrew's list by itself: older Greenwood Hub entries are removed and autolaunch moves to the new version (other modules untouched, backup kept). No autolaunch setting needed on the TV.
+- Remote keys: if the local remote channel refuses, the helper retries over the TV's own network address.
+
 ## 0.5.1 — 2026-10-24
 - One-click updates: About shows "Install update vX" when a newer release exists (and a small badge on home). The hub points TizenBrew to the new version itself, starts it and reloads; no module names to type. "Previous version" rolls back the same way. TizenBrew's settings are backed up first (tizenbrewConfig.greenwood-backup.json).
 - Clean hand-over between versions: a new helper asks the old one to free its port, and the sleep timer carries over.
