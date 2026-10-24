@@ -1,0 +1,117 @@
+/* Greenwood Hub v1 "Colours" — Chromium M63 safe:
+   Avoided on purpose: flex spacing property, cone gradients, blur filters. Animate transform/opacity only. */
+
+@font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: normal;
+  src: url(fonts/cormorant-600-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: normal;
+  src: url(fonts/cormorant-600-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Manrope"; font-weight: 500; font-style: normal;
+  src: url(fonts/manrope-500-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Manrope"; font-weight: 500; font-style: normal;
+  src: url(fonts/manrope-500-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Manrope"; font-weight: 700; font-style: normal;
+  src: url(fonts/manrope-700-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Manrope"; font-weight: 700; font-style: normal;
+  src: url(fonts/manrope-700-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+
+:root {
+  --forest: #012B28; --pine: #0B3A35; --pine-light: #114740; --line: #1D4B45;
+  --gold: #EBB42C; --ivory: #F4F2EC; --sage: #A9BDB7;
+  --bg: radial-gradient(ellipse at 50% 30%, #11534A 0%, #012B28 58%, #011815 100%);
+}
+
+html, body { margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--forest); }
+body { font-family: Manrope, Arial, sans-serif; color: var(--ivory); -webkit-font-smoothing: antialiased; cursor: none; }
+* { box-sizing: border-box; }
+
+.stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); transform-origin: 0 0; }
+
+/* Header — safe margins 96 px sides, 56 px top */
+.logo { position: absolute; left: 96px; top: 56px; width: 196px; height: 64px; object-fit: contain; }
+.greet { position: absolute; left: 96px; top: 168px; font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 56px; line-height: 64px; }
+.greet .name { color: var(--gold); margin-top: 8px; }
+.info { position: absolute; right: 96px; top: 56px; display: flex; align-items: flex-start; }
+.cloud { width: 64px; height: 64px; color: var(--gold); margin-right: 24px; }
+.info-text { text-align: right; }
+.date { font-size: 28px; font-weight: 700; line-height: 40px; }
+.weather { font-size: 24px; font-weight: 500; line-height: 32px; color: #C9D6D2; margin-top: 8px; }
+
+/* Menu edge tab (opens the drawer) */
+.edge { position: absolute; left: 0; top: 432px; width: 48px; height: 216px; border-radius: 0 20px 20px 0; background: rgba(11,58,53,.92);
+  color: var(--gold); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.edge-arrow { font-size: 34px; line-height: 34px; font-weight: 700; margin-bottom: 16px; }
+.edge-text { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 16px; font-weight: 700; letter-spacing: 4px; }
+
+/* CLK-4 watch — 520 px dial inside a 624 px canvas (case shadow margin). Only transforms change. */
+.watch { position: absolute; left: 648px; top: 44px; width: 624px; height: 624px; }
+.w-layer { position: absolute; left: 0; top: 0; width: 624px; height: 624px; }
+.w-hand { will-change: transform; }
+.w-small { position: absolute; width: 114px; height: 114px; top: 255px; }
+#h-day, #h-day-s { left: 169.72px; }
+#h-date, #h-date-s { left: 340.28px; }
+.w-moon { position: absolute; left: 286px; top: 371.28px; width: 52px; height: 52px; }
+
+/* Tile rows — 5 × 232 + 4 × 24 = 1256 px, centred */
+.rows { position: absolute; left: 332px; top: 656px; width: 1256px; }
+.label { font-size: 20px; font-weight: 700; letter-spacing: 4px; line-height: 24px; color: var(--gold); margin-bottom: 16px; }
+.label-gap { margin-top: 40px; }
+.row { display: flex; }
+.row > .t { margin-right: 24px; }
+.row > .t:last-child { margin-right: 0; }
+
+.t { position: relative; border: 2px solid var(--line); background: var(--pine); color: var(--ivory);
+  font-family: Manrope, Arial, sans-serif; transition: transform .18s ease-out; will-change: transform; }
+.t.focus { background: var(--gold); border-color: var(--gold); color: var(--forest); transform: scale(1.06);
+  box-shadow: 0 16px 36px rgba(0,0,0,.45); z-index: 2; }
+
+.app { width: 232px; height: 128px; border-radius: 16px; padding: 0 24px; display: flex; flex-direction: column; justify-content: center; }
+.app .l { font-size: 28px; font-weight: 700; line-height: 36px; }
+.app .s { font-size: 20px; font-weight: 500; line-height: 28px; color: var(--sage); margin-top: 4px; }
+.app.focus .s { color: var(--pine); }
+.app.off .l, .app.off .s { opacity: .55; }
+.app.off.focus .l, .app.off.focus .s { opacity: 1; }
+
+.pill { width: 232px; height: 72px; border-radius: 36px; border-color: var(--gold); background: transparent; color: var(--gold);
+  font-size: 22px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.pill svg { width: 26px; height: 26px; margin-right: 12px; }
+
+/* Drawer (H3-D) */
+.drawer-wrap { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; z-index: 8; }
+.drawer-wrap[hidden] { display: none; }
+.drawer-dim { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: rgba(0,10,9,.55); }
+.drawer { position: absolute; left: 0; top: 0; width: 480px; height: 1080px; padding: 56px 32px 48px 32px; background: var(--pine);
+  border-right: 1px solid rgba(235,180,44,.35); box-shadow: 32px 0 64px rgba(0,0,0,.45); }
+.drawer-logo { width: 196px; height: 64px; object-fit: contain; margin: 0 0 48px 24px; display: block; }
+.mi { height: 80px; border-radius: 16px; padding: 0 24px; display: flex; align-items: center; font-size: 26px; font-weight: 700;
+  color: var(--ivory); margin-bottom: 8px; border: 0; background: transparent; transition: none; transform: none; }
+.mi svg { width: 30px; height: 30px; margin-right: 24px; }
+.mi.focus { background: var(--gold); color: var(--forest); transform: none; box-shadow: none; }
+.mi.off { color: var(--sage); }
+.drawer-hint { position: absolute; left: 56px; bottom: 48px; font-size: 20px; color: var(--sage); }
+
+/* iPhone help card */
+.card-wrap { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: rgba(0,10,9,.72); z-index: 10; }
+.card-wrap[hidden] { display: none; }
+.card { position: absolute; left: 560px; top: 260px; width: 800px; padding: 56px 64px; border-radius: 24px; background: var(--pine);
+  border: 2px solid rgba(235,180,44,.5); }
+.card-title { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 48px; line-height: 56px; color: var(--gold); margin-bottom: 32px; }
+.card-steps { margin: 0; padding-left: 40px; font-size: 28px; line-height: 40px; }
+.card-steps li { margin-bottom: 16px; }
+.card-steps b { color: var(--gold); }
+.card-hint { margin-top: 32px; font-size: 20px; color: var(--sage); }
+
+/* Toast */
+.toast { position: absolute; left: 660px; bottom: 40px; width: 600px; padding: 16px 24px; border-radius: 16px; background: var(--pine-light);
+  border: 1px solid var(--line); font-size: 24px; line-height: 32px; text-align: center; opacity: 0; transition: opacity .2s linear; z-index: 20; }
+.toast.on { opacity: 1; }
+
+.preview-badge { position: absolute; right: 96px; bottom: 24px; font-size: 18px; color: var(--sage); opacity: .7; }
+.preview-badge[hidden] { display: none; }
+
+html, body { background: #011815; }

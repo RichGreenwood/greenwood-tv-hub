@@ -1,0 +1,16 @@
+{
+  "_note": "Targets. KEY_* = remote key sent by service.js to the TV's remote API. Anything else = native app ID, read from this TV's own app list (apps.csv, 24 Oct 2026). Never guess. Empty = 'Not linked yet'.",
+  "hbo": "3202301029760",
+  "netflix": "3201907018807",
+  "tetplus": "3201701011479",
+  "youtube": "111299001912",
+  "spotify": "3201606009684",
+  "internet": "org.tizen.browser",
+  "apps": "",
+  "hdmi1": "KEY_HDMI1",
+  "hdmi2": "KEY_HDMI2",
+  "hdmi3": "KEY_HDMI3",
+  "settings": "KEY_MENU",
+  "sources": "KEY_SOURCE",
+  "samsung": "KEY_HOME"
+}

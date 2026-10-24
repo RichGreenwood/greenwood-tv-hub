@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Greenwood Hub</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage" class="stage">
+  <div class="edge" id="edge"><span class="edge-arrow">&#8250;</span><span class="edge-text">MENU</span></div>
+
+  <img class="logo" src="img/greenwood-logo-gold.png" alt="Greenwood Media">
+
+  <div class="greet">
+    <div id="greeting">Hello,</div>
+    <div class="name" id="name"></div>
+  </div>
+
+  <div class="info">
+    <svg class="cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.6 4.2 4.2 0 0 0 7 18z"/></svg>
+    <div class="info-text">
+      <div class="date" id="date"></div>
+      <div class="weather" id="weather"></div>
+    </div>
+  </div>
+
+  <!-- CLK-4 watch: pre-rendered layers, only transforms change at runtime -->
+  <div class="watch" id="watch">
+    <img class="w-layer" src="img/watch-dial.png" alt="">
+    <svg class="w-moon" id="moon" viewBox="0 0 100 100"><defs><radialGradient id="moonLit" cx="42%" cy="38%" r="70%"><stop offset="0%" stop-color="#fff7da"/><stop offset="65%" stop-color="#efcf73"/><stop offset="100%" stop-color="#c39229"/></radialGradient></defs><path id="moon-path" d="" fill="url(#moonLit)"/></svg>
+    <img class="w-small" id="h-day-s" src="img/day-hand-shadow.png" alt="">
+    <img class="w-small" id="h-day" src="img/day-hand.png" alt="">
+    <img class="w-small" id="h-date-s" src="img/date-hand-shadow.png" alt="">
+    <img class="w-small" id="h-date" src="img/date-hand.png" alt="">
+    <img class="w-layer w-hand" id="h-hour-s" src="img/hour-hand-shadow.png" alt="">
+    <img class="w-layer w-hand" id="h-hour" src="img/hour-hand.png" alt="">
+    <img class="w-layer w-hand" id="h-min-s" src="img/minute-hand-shadow.png" alt="">
+    <img class="w-layer w-hand" id="h-min" src="img/minute-hand.png" alt="">
+    <img class="w-layer w-hand" id="h-sec-s" src="img/second-hand-shadow.png" alt="">
+    <img class="w-layer w-hand" id="h-sec" src="img/second-hand.png" alt="">
+    <img class="w-layer" src="img/watch-glass.png" alt="">
+  </div>
+
+  <div class="rows">
+    <div class="label">WATCH</div>
+    <div class="row" id="row-watch"></div>
+    <div class="label label-gap">CONNECT</div>
+    <div class="row" id="row-connect"></div>
+  </div>
+
+  <div class="drawer-wrap" id="drawer" hidden>
+    <div class="drawer-dim"></div>
+    <div class="drawer">
+      <img class="drawer-logo" src="img/greenwood-logo-gold.png" alt="Greenwood Media">
+      <div id="menu"></div>
+      <div class="drawer-hint">Back or &#9654; closes the menu</div>
+    </div>
+  </div>
+
+  <div class="card-wrap" id="card" hidden>
+    <div class="card">
+      <div class="card-title">Show your iPhone on the TV</div>
+      <ol class="card-steps">
+        <li>iPhone and TV on the same Wi-Fi.</li>
+        <li>Open Control Centre on the iPhone.</li>
+        <li>Tap <b>Screen Mirroring</b>.</li>
+        <li>Choose <b id="card-tv">Greenwood TV</b>.</li>
+      </ol>
+      <div class="card-hint">Back closes this card</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="preview-badge" id="badge" hidden>PC preview · click once, then arrows = remote · Enter = OK · Esc = Back</div>
+</div>
+<script src="main.js"></script>
+</body>
+</html>

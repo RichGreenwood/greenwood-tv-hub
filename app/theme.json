@@ -1,0 +1,92 @@
+{
+  "_note": "Ričards edits this file. Claude merges and never overwrites values set here.",
+  "colours": {
+    "forest": "#012B28",
+    "pine": "#0B3A35",
+    "pineLight": "#114740",
+    "line": "#1D4B45",
+    "gold": "#EBB42C",
+    "ivory": "#F4F2EC",
+    "sage": "#A9BDB7"
+  },
+  "background": "radial-gradient(ellipse at 50% 28%, #11534A 0%, #012B28 58%, #011815 100%)",
+  "name": "Richard",
+  "tvName": "Greenwood TV",
+  "clock": {
+    "secondHand": true
+  },
+  "weather": {
+    "enabled": true,
+    "place": "Rīga",
+    "latitude": 56.95,
+    "longitude": 24.11,
+    "cacheMinutes": 30
+  },
+  "watch": [
+    {
+      "id": "hbo",
+      "label": "HBO Max",
+      "sub": "Series, films"
+    },
+    {
+      "id": "netflix",
+      "label": "Netflix",
+      "sub": "Series, films"
+    },
+    {
+      "id": "tetplus",
+      "label": "Tet+",
+      "sub": "TV, films"
+    },
+    {
+      "id": "youtube",
+      "label": "YouTube",
+      "sub": "Videos"
+    },
+    {
+      "id": "spotify",
+      "label": "Spotify",
+      "sub": "Music"
+    }
+  ],
+  "connect": [
+    {
+      "id": "hdmi1",
+      "label": "HDMI 1"
+    },
+    {
+      "id": "hdmi2",
+      "label": "HDMI 2"
+    },
+    {
+      "id": "hdmi3",
+      "label": "HDMI 3"
+    },
+    {
+      "id": "iphone",
+      "label": "iPhone"
+    }
+  ],
+  "menu": [
+    {
+      "id": "settings",
+      "label": "Settings"
+    },
+    {
+      "id": "internet",
+      "label": "Internet"
+    },
+    {
+      "id": "sources",
+      "label": "Sources"
+    },
+    {
+      "id": "apps",
+      "label": "All apps"
+    },
+    {
+      "id": "samsung",
+      "label": "Samsung Home"
+    }
+  ]
+}
