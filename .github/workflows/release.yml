@@ -1,0 +1,27 @@
+# Creates the version tag + GitHub release automatically after files are uploaded to main.
+# The tag is taken from package.json "version" (e.g. 0.5.2 -> v0.5.2) and is only created once,
+# so a tag can never point at an older upload.
+name: Release from package.json
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create tag and release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="v$(jq -r .version package.json)"
+          if ! echo "$V" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then echo "bad version $V"; exit 1; fi
+          if gh release view "$V" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/$V" >/dev/null 2>&1; then
+            echo "$V already exists, nothing to do"; exit 0
+          fi
+          NOTES=$(awk -v v="## ${V#v} " 'index($0,v)==1{f=1;next} /^## /{f=0} f' CHANGELOG.md)
+          gh release create "$V" --target "$GITHUB_SHA" --title "Greenwood Hub $V" --notes "${NOTES:-Greenwood Hub $V}"

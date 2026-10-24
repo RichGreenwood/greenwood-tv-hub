@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.5.0';
+  var VERSION = '0.5.1';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -27,6 +27,7 @@
   var calData = { configured: 0, events: [], at: 0 };
   var sleepEndsAt = 0;
   var forceNight = false;
+  var updInfo = null; /* answer of /update/check */
 
   /* ---------- Language ---------- */
   function dict(lang) { return T[lang] || T.en; }
@@ -193,6 +194,7 @@
     renderAgenda();
     renderWeek();
     updateSleepBadge();
+    updateUpdBadge();
     showWeather(store('weather'), false);
     renderSun();
   }
@@ -681,7 +683,11 @@
     about: {
       title: function (lang) { return tl(lang, 'aboutTitle'); },
       html: function () {
-        return '<div class="ab"><div class="ab-rows" id="ab-rows"></div><div class="ab-btns">' +
+        var ub = '';
+        if (updInfo && updInfo.newer) { ub += '<div class="btn btn-gold fx" data-act="update" data-v="' + esc(updInfo.latest) + '">' + esc(fmt(t('updInstall'), updInfo.latest)) + '</div>'; }
+        else { ub += '<div class="btn fx" data-act="check">' + esc(t('updCheck')) + '</div>'; }
+        if (updInfo && updInfo.previous && updInfo.previous !== 'v' + updInfo.current) { ub += '<div class="btn fx" data-act="update" data-v="' + esc(updInfo.previous) + '">' + esc(fmt(t('updPrev'), updInfo.previous)) + '</div>'; }
+        return '<div class="ab"><div class="ab-rows" id="ab-rows"></div><div class="ab-btns">' + ub +
           '<div class="btn fx" data-act="setup">' + esc(t('calConnect')) + '</div>' +
           '<div class="btn fx" data-act="refresh">' + esc(t('calRefresh')) + '</div>' +
           (calData.configured ? '<div class="btn fx" data-act="forget">' + esc(t('calForget')) + '</div>' : '') + '</div></div>';
@@ -698,30 +704,47 @@
           var calErr = s && s.calendarErrors && s.calendarErrors.length;
           html += row(t('a_calendar'), cals.length ? cals.join(' + ') + ' · ' + agoText(s.calendarAt) + (calErr ? ' · ' + s.calendarErrors[0].error : '') : t('never'), cals.length ? (calErr ? 'warn' : 'ok') : 'warn');
           html += row(t('a_storage'), s && s.storage ? mb(s.storage.free) + ' / ' + mb(s.storage.total) : '—', s && s.storage && s.storage.free < 100 * 1024 * 1024 ? 'warn' : 'ok');
-          html += row(t('a_network'), s && s.ip ? s.ip : '—', s && s.ip ? 'ok' : 'warn');
+          html += row(t('a_network'), s && s.ip ? s.ip : '\u2014', s && s.ip ? 'ok' : 'warn');
+          html += row(t('a_updates'), !updInfo ? '\u2014' : updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate') + ' \u00B7 v' + VERSION, updInfo && updInfo.newer ? 'warn' : 'ok');
           $('ab-rows').innerHTML = html;
         }
         paint(null);
         if (ON_TV) { callService('/status', function (r) { if (scr.id === 'about') { paint(r.ok ? r : null); } }, 4000); }
       },
-      act: function (a) {
+      act: function (a, v) {
         if (a === 'setup') { renderScreen('setup'); }
+        else if (a === 'check') { checkUpdate(true, function () { if (scr.id === 'about') { renderScreen('about', 0); } toast(updInfo && updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate')); }); }
+        else if (a === 'update') { runUpdate(v); }
         else if (a === 'refresh') { loadCalendar(true, function () { toast(t('calRefresh') + ' ✓'); if (scr.id === 'about') { renderScreen('about', scr.f); } }); }
         else if (a === 'forget') { callService('/setup/forget', function () { calData = { configured: 0, events: [], at: 0 }; store('cal', calData); renderAgenda(); renderWeek(); renderScreen('about', 0); }); }
       }
     },
+    update: {
+      title: function (lang) { return tl(lang, 'updTitle'); },
+      html: function () { return '<div class="su"><div class="up-mark"></div><div class="su-state" id="up-state"></div><div class="scr-note small">' + esc(t('updNote')) + '</div></div>'; }
+    },
     setup: {
       title: function (lang) { return tl(lang, 'setupTitle'); },
       html: function () {
-        return '<div class="su"><div class="su-k">' + esc(t('setupCode')) + '</div><div class="su-code" id="su-code">••• •••</div>' +
-          '<div class="scr-note">' + esc(t('setupSay')) + '</div><div class="su-state" id="su-state">' + esc(t('setupWait')) + '</div>' +
-          '<div class="scr-note small">' + esc(t('setupValid')) + '</div></div>';
+        return '<div class="su su2"><div class="su-qr" id="su-qr"></div><div class="su-tx">' +
+          '<div class="su-k">' + esc(t('setupOpen')) + '</div><div class="su-url" id="su-url">\u2014</div>' +
+          '<div class="su-k su-k2">' + esc(t('setupCode')) + '</div><div class="su-code" id="su-code">\u2022\u2022\u2022 \u2022\u2022\u2022</div>' +
+          '<div class="su-state" id="su-state">' + esc(t('setupWait')) + '</div>' +
+          '<div class="scr-note small">' + esc(t('setupValid')) + '</div></div></div>';
       },
       init: function () {
         scr.onBack = function () { if (ON_TV) { callService('/setup/stop', function () {}); } };
-        if (!ON_TV) { $('su-code').textContent = '482 913'; return; }
+        function showLink(ip, port) {
+          var link = 'http://' + ip + ':' + port;
+          $('su-url').textContent = ip + ':' + port;
+          if (window.qrcode) {
+            try { var q = window.qrcode(0, 'M'); q.addData(link); q.make(); $('su-qr').innerHTML = q.createSvgTag({ cellSize: 9, margin: 3, scalable: true }); } catch (e) { $('su-qr').innerHTML = ''; }
+          }
+        }
+        if (!ON_TV) { $('su-code').textContent = '482 913'; showLink('192.168.1.103', 8096); return; }
         callService('/setup/start', function (r) {
           if (!r.ok) { $('su-state').textContent = t('setupFail'); return; }
+          showLink(r.ip || '?', r.port || 8096);
           $('su-code').textContent = r.pin.slice(0, 3) + ' ' + r.pin.slice(3);
           scr.timer = setInterval(function () {
             callService('/setup/status', function (st) {
@@ -738,6 +761,39 @@
       }
     }
   };
+
+
+  /* ---------- Updates (About -> Install): the helper points TizenBrew to the new tag, then the page moves over ---------- */
+  function checkUpdate(force, cb) {
+    if (!ON_TV) { updInfo = { newer: false, latest: 'v' + VERSION, previous: '' }; if (cb) { cb(); } return; }
+    callService('/update/check' + (force ? '?force=1' : ''), function (r) {
+      if (r && r.current) { updInfo = r; }
+      updateUpdBadge();
+      if (cb) { cb(); }
+    }, 20000);
+  }
+  function updateUpdBadge() {
+    var b = $('upd-badge');
+    if (updInfo && updInfo.newer) { b.hidden = false; b.textContent = fmt(t('updBadge'), updInfo.latest); }
+    else { b.hidden = true; }
+  }
+  function runUpdate(tag) {
+    renderScreen('update');
+    var st = $('up-state');
+    if (!ON_TV) { st.textContent = 'Preview: would install ' + tag; return; }
+    st.textContent = t('updWorking');
+    callService('/update/apply?tag=' + encodeURIComponent(tag), function (r) {
+      if (!r.ok) { st.textContent = t('updFail') + ' (' + (r.error || '?') + ')'; return; }
+      var want = tag.replace(/^v/, ''), tries = 0;
+      scr.timer = setInterval(function () {
+        tries++;
+        callService('/status', function (s) {
+          if (s && s.version === want) { clearInterval(scr.timer); st.textContent = t('updDone'); setTimeout(function () { location.href = r.appPath; }, 800); }
+          else if (tries >= 30) { clearInterval(scr.timer); st.textContent = t('updRestart'); }
+        }, 1800);
+      }, 2000);
+    }, 40000);
+  }
 
   /* ---------- Calendar on home (agenda + week strip) and idle ---------- */
   function loadCalendar(force, cb) {
@@ -1140,6 +1196,8 @@
     loadCalendar(false);
     pollSleep();
     setInterval(function () { if (!document.hidden) { loadCalendar(false); pollSleep(); } }, 5 * 60000);
+    setTimeout(function () { checkUpdate(false); }, 15000);
+    setInterval(function () { if (!document.hidden) { checkUpdate(false); } }, 6 * 3600000);
     getJSON('data/namedays-lv.json?v=' + VERSION, function (err, d) { if (!err && d) { nameDays = d; showNameDays(); } });
     armIdle();
     document.addEventListener('keydown', onKey);

@@ -383,3 +383,20 @@ html, body { background: #011815; }
 .stage.idle.night .idle-hint { opacity: 0; }
 .stage.idle.night .sun { opacity: .7; }
 .sun { transition: opacity .8s ease; }
+
+/* ===== 0.5.1: update badge, About update buttons, phone setup with QR, update screen ===== */
+.upd-badge { border-color: var(--gold); color: var(--gold); }
+.info-text .sleep-badge + .upd-badge { margin-left: 10px; }
+.btn-gold { background: var(--gold); color: var(--forest); }
+.su2 { display: flex; align-items: center; text-align: left; padding-top: 0; }
+.su-qr { width: 420px; height: 420px; margin-right: 88px; flex: none; border-radius: 24px; background: #F4F2EC; padding: 18px; }
+.su-qr svg { display: block; width: 384px; height: 384px; }
+.su-qr svg path { fill: #012B28; }
+.su-qr svg rect { fill: #F4F2EC; }
+.su-tx { min-width: 0; }
+.su-url { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 76px; line-height: 1.1; margin: 10px 0 0; font-variant-numeric: lining-nums; }
+.su-k2 { margin-top: 44px; }
+.su2 .su-code { font-size: 120px; margin: 6px 0 0; letter-spacing: 8px; }
+.su2 .su-state { margin-top: 18px; }
+.up-mark { width: 88px; height: 88px; margin: 40px auto 30px; border-radius: 50%; border: 6px solid rgba(235,180,44,.25); border-top-color: var(--gold); animation: gwspin 1.1s linear infinite; }
+@keyframes gwspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

@@ -31,8 +31,14 @@ var os = require('os');
 var tls = require('tls');
 var fs = require('fs');
 var crypto = require('crypto');
+var net = require('net');
 
-var VERSION = '0.5.0';
+var VERSION = '0.5.1';
+var REPO = 'RichGreenwood/greenwood-tv-hub';
+var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
+var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
+var MOD_RE = /^gh\/RichGreenwood\/greenwood-tv-hub(@[^\/]*)?$/i;
+var retired = false; /* true after a newer hub version took over */
 var PORT = 8095;
 var SETUP_PORT = 8096;
 var CFG_FILE = '/home/owner/share/greenwoodHub.json';
@@ -91,7 +97,8 @@ function parseFrames(buf) {
   return { messages: messages, rest: buf };
 }
 
-function sendKey(key, cb) {
+function sendKey(key, cb, host) {
+  host = host || '127.0.0.1';
   var token = readToken();
   var path = '/api/v2/channels/samsung.remote.control?name=' + NAME_B64 +
     (token ? '&token=' + token : '');
@@ -107,15 +114,15 @@ function sendKey(key, cb) {
     done = true;
     clearTimeout(timer);
     try { sock.end(); } catch (e) { /* ignore */ }
-    log((err || 'ok') + ' ' + key + ' after ' + last + (token ? ' (token)' : ' (no token)'));
+    log((err || 'ok') + ' ' + key + ' via ' + host + ' after ' + last + (token ? ' (token)' : ' (no token)'));
     cb(err, last);
   }
 
   try {
-    sock = tls.connect({ host: '127.0.0.1', port: 8002, rejectUnauthorized: false }, function () {
+    sock = tls.connect({ host: host, port: 8002, rejectUnauthorized: false }, function () {
       var wsKey = crypto.randomBytes(16).toString('base64');
       sock.write('GET ' + path + ' HTTP/1.1\r\n' +
-        'Host: 127.0.0.1:8002\r\n' +
+        'Host: ' + host + ':8002\r\n' +
         'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
         'Sec-WebSocket-Key: ' + wsKey + '\r\nSec-WebSocket-Version: 13\r\n\r\n');
     });
@@ -603,6 +610,12 @@ function startSetup() {
   setup.until = Date.now() + 10 * 60000;
   setup.tries = 0; setup.done = false; setup.count = 0;
   setup.server = http.createServer(function (req, res) {
+    if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(SETUP_PAGE);
+      return;
+    }
     res.setHeader('Content-Type', 'application/json');
     if (req.method !== 'POST' || req.url !== '/setup') { res.statusCode = 404; res.end('{"ok":false}'); return; }
     if (!setup.pin || Date.now() > setup.until) { res.statusCode = 410; res.end('{"ok":false,"error":"setup closed"}'); return; }
@@ -638,14 +651,48 @@ function startSetup() {
   return setup.pin;
 }
 
+
+/* Page shown on a phone or laptop at http://<TV IP>:8096 while the code is on the TV. No outside files. */
+var SETUP_PAGE = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+  '<title>Greenwood TV · Calendars</title><style>' +
+  'body{margin:0;background:#012B28;color:#F4F2EC;font:16px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif}' +
+  '.w{max-width:560px;margin:0 auto;padding:28px 18px 40px}h1{font:600 30px/1.2 Georgia,serif;margin:0 0 6px}' +
+  'p{color:#A9BDB7;margin:0 0 18px}label{display:block;font-weight:700;margin:18px 0 6px}' +
+  'small{display:block;color:#A9BDB7;font-weight:400;margin-top:2px}' +
+  'input{box-sizing:border-box;width:100%;padding:13px 14px;border-radius:12px;border:1px solid #2F5A54;background:#0B3A35;color:#F4F2EC;font-size:16px}' +
+  'input:focus{outline:2px solid #EBB42C;border-color:#EBB42C}.row{display:flex}.row input:first-child{flex:0 0 34%;margin-right:8px}' +
+  'button{margin-top:26px;width:100%;padding:15px;border:0;border-radius:999px;background:#EBB42C;color:#012B28;font-size:17px;font-weight:800}' +
+  '#m{margin-top:18px;font-weight:700}.ok{color:#7CC4A4}.bad{color:#E8A15A}details{margin-top:28px;color:#A9BDB7}summary{cursor:pointer;color:#F4F2EC}' +
+  'ol{padding-left:20px}li{margin:4px 0}</style></head><body><div class="w">' +
+  '<h1>Connect calendars</h1><p>Greenwood TV shows meeting times and titles. The links stay on the TV only.</p>' +
+  '<label>Code on the TV</label><input id="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456">' +
+  '<label>Calendar 1<small>Name, then its secret iCal address</small></label><div class="row"><input id="l1" value="Personal"><input id="u1" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></div>' +
+  '<label>Calendar 2 <small>Optional</small></label><div class="row"><input id="l2" value="Aerones"><input id="u2" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></div>' +
+  '<button id="b">Send to TV</button><div id="m"></div>' +
+  '<details><summary>Where do I find the secret iCal address?</summary><ol>' +
+  '<li>On a computer, open calendar.google.com.</li><li>Left side: hover the calendar → ⋮ → <b>Settings and sharing</b>.</li>' +
+  '<li>Scroll to <b>Integrate calendar</b> → <b>Secret address in iCal format</b> → copy.</li>' +
+  '<li>Do the same in the other Google account (Aerones). If that field is missing, the company has switched it off.</li></ol></details>' +
+  '</div><script>' +
+  'var b=document.getElementById("b"),m=document.getElementById("m");function v(i){return document.getElementById(i).value.trim();}' +
+  'b.onclick=function(){var c=[];if(v("u1"))c.push({label:v("l1")||"Calendar 1",url:v("u1")});if(v("u2"))c.push({label:v("l2")||"Calendar 2",url:v("u2")});' +
+  'if(!c.length){m.className="bad";m.textContent="Paste at least one link.";return;}b.disabled=true;m.className="";m.textContent="Sending…";' +
+  'var x=new XMLHttpRequest();x.open("POST","/setup");x.setRequestHeader("Content-Type","application/json");' +
+  'x.onload=function(){var r={};try{r=JSON.parse(x.responseText);}catch(e){}if(r.ok){m.className="ok";m.textContent="Done ✓ "+r.count+" calendar(s) saved. You can close this page.";}' +
+  'else{b.disabled=false;m.className="bad";m.textContent=r.error||"Did not work. Check the code and links.";}};' +
+  'x.onerror=function(){b.disabled=false;m.className="bad";m.textContent="TV not reachable. Is the code still on the TV?";};' +
+  'x.send(JSON.stringify({pin:v("pin").replace(/\\D/g,""),calendars:c}));};</script></body></html>';
+
 /* ---------- Sleep timer ---------- */
 var sleep = { endsAt: 0, timer: null };
-function setSleep(min) {
+function setSleep(min) { setSleepUntil(min ? Date.now() + min * 60000 : 0); }
+function setSleepUntil(ts) {
   clearTimeout(sleep.timer);
   sleep.endsAt = 0;
-  if (!min) { return; }
-  sleep.endsAt = Date.now() + min * 60000;
+  if (!ts || ts <= Date.now()) { return; }
+  sleep.endsAt = ts;
   sleep.timer = setTimeout(function () {
+    if (retired) { return; }
     sleep.endsAt = 0;
     /* only switch off if the TV is still on (KEY_POWER would otherwise switch it on) */
     http.get('http://127.0.0.1:8001/api/v2/', function (res) {
@@ -658,7 +705,7 @@ function setSleep(min) {
         log('sleep timer fired, TV ' + (on ? 'on -> KEY_POWER' : 'not on -> nothing'));
       });
     }).on('error', function () { log('sleep timer: status page not reachable, nothing sent'); });
-  }, min * 60000);
+  }, ts - Date.now());
 }
 
 /* ---------- Status ---------- */
@@ -678,7 +725,8 @@ function status(cb0) {
     ok: true, version: VERSION, uptimeMin: Math.round((Date.now() - STARTED) / 60000), ip: lanIp(),
     lastKey: LOG.length ? LOG[LOG.length - 1] : '', token: !!readToken(),
     calendars: (cfg.calendars || []).map(function (c) { return c.label; }),
-    calendarAt: calCache.at, calendarErrors: calCache.errors, sleepEndsAt: sleep.endsAt, storage: null
+    calendarAt: calCache.at, calendarErrors: calCache.errors, sleepEndsAt: sleep.endsAt, storage: null,
+    module: currentModule(), previous: cfg.prevTag || ''
   };
   try {
     tizen.systeminfo.getPropertyValue('STORAGE', function (s) {
@@ -691,6 +739,140 @@ function status(cb0) {
   } catch (e) { cb(out); }
 }
 
+
+/* ---------- Updates: Ričards presses "Install" in About; the hub switches TizenBrew to the new tag ---------- */
+function verNum(v) {
+  var m = /^v?(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(v || ''));
+  return m ? (+m[1]) * 1000000 + (+m[2]) * 1000 + (+m[3]) : -1;
+}
+function readTb() { try { return JSON.parse(String(fs.readFileSync(TB_CFG, 'utf8'))); } catch (e) { return null; } }
+function currentModule() {
+  var c = readTb();
+  if (!c || !c.modules) { return ''; }
+  for (var i = 0; i < c.modules.length; i++) { if (MOD_RE.test(c.modules[i])) { return c.modules[i]; } }
+  return '';
+}
+function getJson(url, cb) {
+  var done = false;
+  function finish(err, data) { if (!done) { done = true; cb(err, data); } }
+  try {
+    var opts = require('url').parse(url);
+    opts.headers = { 'User-Agent': 'greenwood-tv-hub/' + VERSION, 'Accept': 'application/json' };
+    var req = https.get(opts, function (res) {
+      if (res.statusCode !== 200) { res.resume(); finish('HTTP ' + res.statusCode); return; }
+      var b = '';
+      res.on('data', function (c) { b += c; if (b.length > 512 * 1024) { req.abort(); finish('too large'); } });
+      res.on('end', function () { try { finish(null, JSON.parse(b)); } catch (e) { finish('bad json'); } });
+    });
+    req.setTimeout(15000, function () { req.abort(); finish('timeout'); });
+    req.on('error', function (e) { finish((e && e.code) || 'network'); });
+  } catch (e) { finish('request error'); }
+}
+var upd = { at: 0, latest: '', error: '' };
+function checkUpdate(force, cb) {
+  if (!force && Date.now() - upd.at < 3 * 3600000 && upd.at) { cb(); return; }
+  getJson('https://api.github.com/repos/' + REPO + '/tags?per_page=30', function (err, tags) {
+    var best = '';
+    if (!err && tags && tags.length) {
+      tags.forEach(function (t) { var n = t && t.name; if (verNum(n) > verNum(best)) { best = n; } });
+      upd = { at: Date.now(), latest: best, error: '' };
+      cb(); return;
+    }
+    /* fallback: jsDelivr's list (versions without the "v") */
+    getJson('https://data.jsdelivr.com/v1/packages/gh/' + REPO, function (err2, d) {
+      if (!err2 && d && d.versions) {
+        d.versions.forEach(function (x) { if (verNum(x.version) > verNum(best)) { best = 'v' + x.version; } });
+        upd = { at: Date.now(), latest: best, error: '' };
+      } else { upd.error = err || err2 || 'no answer'; upd.at = Date.now(); }
+      cb();
+    });
+  });
+}
+/* Ask TizenBrew (local socket 127.0.0.1:8081) to start the service of another module version. */
+function tbStartService(fullName, cb) {
+  var done = false, upgraded = false, buf = new Buffer(0);
+  function finish(err) { if (!done) { done = true; try { sock.end(); } catch (e) { /* ignore */ } cb(err); } }
+  var sock = net.connect({ host: '127.0.0.1', port: 8081 }, function () {
+    sock.write('GET / HTTP/1.1\r\nHost: 127.0.0.1:8081\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n' +
+      'Sec-WebSocket-Key: ' + crypto.randomBytes(16).toString('base64') + '\r\nSec-WebSocket-Version: 13\r\n\r\n');
+  });
+  sock.on('data', function (chunk) {
+    if (upgraded) { return; }
+    buf = Buffer.concat([buf, chunk]);
+    var s0 = buf.toString('binary');
+    if (s0.indexOf('\r\n\r\n') < 0) { return; }
+    if (s0.indexOf(' 101') < 0) { finish('handshake'); return; }
+    upgraded = true;
+    sock.write(frame(JSON.stringify({ type: 6 /* Events.StartService */, payload: { fullName: fullName, name: fullName.replace(/^gh\//, ''), serviceFile: 'service.js', packageType: 'app' } })));
+    setTimeout(function () { finish(null); }, 600);
+  });
+  sock.on('error', function () { finish('socket'); });
+  setTimeout(function () { finish('timeout'); }, 8000);
+}
+function applyUpdate(tag, res) {
+  if (!/^v\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(tag)) { res.end('{"ok":false,"error":"bad version"}'); return; }
+  var full = 'gh/' + REPO + '@' + tag;
+  /* the release must be a real Greenwood Hub package before TizenBrew is pointed at it */
+  getJson('https://cdn.jsdelivr.net/' + full + '/package.json', function (err, pk) {
+    if (err || !pk || pk.packageType !== 'app' || pk.serviceFile !== 'service.js' || pk.version !== tag.slice(1)) {
+      res.end(JSON.stringify({ ok: false, error: 'release not ready (' + (err || 'package.json') + ')' })); return;
+    }
+    var c = readTb();
+    if (!c || !c.modules || !c.modules.length) { res.end('{"ok":false,"error":"TizenBrew settings not readable"}'); return; }
+    var old = currentModule();
+    try { fs.writeFileSync(TB_BACKUP, JSON.stringify(c, null, 4)); } catch (e) { res.end('{"ok":false,"error":"backup failed"}'); return; }
+    var mods = [], placed = false;
+    c.modules.forEach(function (m) {
+      if (MOD_RE.test(m)) { if (!placed) { mods.push(full); placed = true; } }
+      else { mods.push(m); }
+    });
+    if (!placed) { mods.push(full); }
+    c.modules = mods;
+    if (!c.autoLaunchModule || MOD_RE.test(c.autoLaunchModule)) { c.autoLaunchModule = full; }
+    try {
+      fs.writeFileSync(TB_CFG + '.tmp', JSON.stringify(c, null, 4));
+      JSON.parse(String(fs.readFileSync(TB_CFG + '.tmp', 'utf8')));
+      fs.renameSync(TB_CFG + '.tmp', TB_CFG);
+    } catch (e) { res.end('{"ok":false,"error":"could not save TizenBrew settings"}'); return; }
+    var cfg = readCfg();
+    var oldTag = old.indexOf('@') > 0 ? old.slice(old.indexOf('@') + 1) : '';
+    if (oldTag && oldTag !== tag) { cfg.prevTag = oldTag; }
+    cfg.pendingVersion = tag.slice(1);
+    writeCfg(cfg);
+    log('update: TizenBrew now points to ' + full + (oldTag ? ' (was ' + oldTag + ')' : ''));
+    /* answer first: starting the new helper closes this one's connections */
+    res.end(JSON.stringify({ ok: true, module: full,
+      appPath: 'http://127.0.0.1:8081/module/' + encodeURIComponent(full) + '/app/index.html' }));
+    setTimeout(function () {
+      tbStartService(full, function (e) { if (e) { log('update: start new helper: ' + e); } });
+    }, 500);
+  });
+}
+/* A newer (or the chosen) version asks this one to step back and free the ports. */
+function handoff(v, res) {
+  var cfg = readCfg();
+  var ok = v !== VERSION && (verNum(v) > verNum(VERSION) || v === cfg.pendingVersion);
+  if (!ok) { res.end('{"ok":false}'); return; }
+  res.end(JSON.stringify({ ok: true, sleepEndsAt: sleep.endsAt }));
+  log('handoff to ' + v);
+  retired = true;
+  clearTimeout(sleep.timer);
+  stopSetup();
+  setTimeout(function () {
+    try { server.close(); } catch (e) { /* ignore */ }
+    /* the page keeps idle keep-alive connections; close them so its next request reaches the new helper */
+    openSockets.forEach(function (sk) { try { sk.destroy(); } catch (e) { /* ignore */ } });
+    openSockets = [];
+  }, 200);
+  /* TizenBrew keeps a service it started once; if Ričards later picks this version again
+     (rollback), it is not started a second time, so wake up when chosen. */
+  clearInterval(reviveTimer);
+  reviveTimer = setInterval(function () {
+    if (readCfg().pendingVersion === VERSION) { clearInterval(reviveTimer); retired = false; listenTries = 0; log('chosen again, taking over'); listenMain(); }
+  }, 4000);
+}
+var reviveTimer = null;
+
 var LOG = [];
 function log(line) {
   LOG.push(new Date().toISOString().slice(11, 19) + ' ' + line);
@@ -698,11 +880,27 @@ function log(line) {
 }
 
 /* One retry: after the first "Allow" the TV may close the socket before answering. */
+/* Then the TV's own network address: the laptop test showed the remote channel works over the LAN. */
+var keyHost = '';
 function sendKeyRetry(key, cb) {
+  function viaLan(err0, last0) {
+    var ip = lanIp();
+    if (!ip) { cb(err0, last0); return; }
+    sendKey(key, function (err2, last2) {
+      if (!err2) { keyHost = ip; }
+      cb(err2, last2);
+    }, ip);
+  }
+  if (keyHost) { sendKey(key, function (e, l) { if (e && e !== 'timeout') { keyHost = ''; sendKeyRetry(key, cb); } else { cb(e, l); } }, keyHost); return; }
   sendKey(key, function (err, last) {
-    if (err === 'closed' || err === 'error') {
-      setTimeout(function () { sendKey(key, cb); }, 800);
-    } else { cb(err, last); }
+    if (err === 'closed' || err === 'error' || err === 'handshake') {
+      setTimeout(function () {
+        sendKey(key, function (err1, last1) {
+          if (err1 && err1 !== 'timeout') { viaLan(err1, last1); } else { cb(err1, last1); }
+        });
+      }, 800);
+    } else if (err === 'denied') { viaLan(err, last); }
+    else { cb(err, last); }
   });
 }
 
@@ -720,6 +918,8 @@ function next() {
 }
 var server = http.createServer(function (req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  if (retired) { res.setHeader('Connection', 'close'); }
   res.setHeader('Content-Type', 'application/json');
   var url = req.url || '';
   if (req.method === 'GET' && url === '/apps') {
@@ -759,6 +959,19 @@ var server = http.createServer(function (req, res) {
     res.end(JSON.stringify({ ok: true, endsAt: sleep.endsAt }));
     return;
   }
+  var ho = /^\/handoff\?v=([0-9.]{5,11})$/.exec(url);
+  if (req.method === 'GET' && ho) { handoff(ho[1], res); return; }
+  var uc = /^\/update\/check(\?force=1)?$/.exec(url);
+  if (req.method === 'GET' && uc) {
+    checkUpdate(!!uc[1], function () {
+      var cfg = readCfg();
+      res.end(JSON.stringify({ ok: !upd.error, error: upd.error, current: VERSION, latest: upd.latest,
+        newer: verNum(upd.latest) > verNum(VERSION), previous: cfg.prevTag && cfg.prevTag !== 'v' + VERSION ? cfg.prevTag : '', module: currentModule() }));
+    });
+    return;
+  }
+  var ua = /^\/update\/apply\?tag=(v[0-9.]{5,11})$/.exec(url);
+  if (req.method === 'GET' && ua) { applyUpdate(ua[1], res); return; }
   if (req.method === 'GET' && url === '/log') { res.end(JSON.stringify({ ok: true, log: LOG })); return; }
   var la = /^\/launch\?id=([A-Za-z0-9._]+)$/.exec(url);
   if (req.method === 'GET' && la) { launch(la[1], res); return; }
@@ -770,6 +983,33 @@ var server = http.createServer(function (req, res) {
   queue.push({ key: key, res: res });
   next();
 });
-/* If the hub is opened again, an earlier copy may already hold the port: keep that one, never crash TizenBrew. */
-server.on('error', function () { /* EADDRINUSE or similar: ignore */ });
-server.listen(PORT, '127.0.0.1');
+/* Port 8095 may still be held by an earlier copy of the hub (same or older version).
+   A newer copy asks the older one to step back; same version: keep the running one. Never crash TizenBrew. */
+var openSockets = [];
+server.on('connection', function (sk) {
+  openSockets.push(sk);
+  sk.on('close', function () { var i = openSockets.indexOf(sk); if (i >= 0) { openSockets.splice(i, 1); } });
+});
+var listenTries = 0;
+function listenMain() { if (!retired) { server.listen(PORT, '127.0.0.1'); } }
+server.on('listening', function () {
+  log('helper ' + VERSION + ' listening');
+  var cfg = readCfg();
+  if (cfg.pendingVersion === VERSION) { delete cfg.pendingVersion; writeCfg(cfg); }
+});
+server.on('error', function (e) {
+  if (!e || e.code !== 'EADDRINUSE' || retired) { return; }
+  listenTries++;
+  http.get('http://127.0.0.1:' + PORT + '/handoff?v=' + VERSION, function (r) {
+    var b = '';
+    r.on('data', function (c) { b += c; });
+    r.on('end', function () {
+      var d = null;
+      try { d = JSON.parse(b); } catch (x) { d = null; }
+      if (d && d.ok) { if (d.sleepEndsAt) { setSleepUntil(d.sleepEndsAt); } setTimeout(listenMain, 900); }
+      else if (d && d.version === undefined && listenTries < 3) { setTimeout(listenMain, 3000); }
+      else { setTimeout(listenMain, listenTries < 10 ? 5000 : 60000); }
+    });
+  }).on('error', function () { setTimeout(listenMain, 3000); });
+});
+listenMain();

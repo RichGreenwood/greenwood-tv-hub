@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 — 2026-10-24
+- One-click updates: About shows "Install update vX" when a newer release exists (and a small badge on home). The hub points TizenBrew to the new version itself, starts it and reloads; no module names to type. "Previous version" rolls back the same way. TizenBrew's settings are backed up first (tizenbrewConfig.greenwood-backup.json).
+- Clean hand-over between versions: a new helper asks the old one to free its port, and the sleep timer carries over.
+- Calendar setup from a phone or laptop: the TV shows a QR code, web address and code; the page there takes the two Google Calendar links. No Claude needed.
+- Automatic releases: uploading files with a new package.json version creates the matching tag (GitHub Actions).
+- All apps fallback list (apps.json) included.
+
 ## 0.5.0 — 2026-10-24
 - Two side panels: left MENU (Change look, Sleep timer, About + Samsung shortcuts), right SCREENS (Calendar, Weather, Daylight, All apps, Idle screen, Night view). Right from the last tile or the right edge tab opens it; Back or Left closes.
 - Calendar: personal + Aerones Google calendars via their secret iCal links (stored only on the TV). Today's meetings on home; week strip Mon-Sun under them (today lit, dot = meetings). Calendar screen shows the next 7 days, days without meetings left out, "+N more" per day. service.js reads Monday of this week to today+7, every 15 min; time zones (incl. clock changes), repeating, moved, cancelled and all-day meetings handled.
