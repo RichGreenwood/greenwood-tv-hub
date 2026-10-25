@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.7.4';
+  var VERSION = '0.7.5';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -338,7 +338,10 @@
      and the password saved once from the phone setup page (kept only on the TV). */
   function drawWifi(r) {
     var qr = $('cw-qr');
-    $('cw-ssid').textContent = r && r.ssid ? r.ssid : '';
+    $('cw-ssid').textContent = r && r.ssid ? r.ssid : '\u2014';
+    $('cw-pw').textContent = r && r.pass ? r.pass : '';
+    $('cw-pwrow').style.display = r && r.pass ? '' : 'none';
+    $('cw-rows').style.display = r && r.ssid ? '' : 'none';
     if (r && r.qr && window.qrcode) {
       try { var q = window.qrcode(0, 'M'); q.addData(r.qr); q.make(); qr.innerHTML = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }); } catch (e) { qr.innerHTML = ''; }
       qr.className = 'cw-qr';
@@ -350,7 +353,7 @@
     }
   }
   function paintWifi() {
-    if (!ON_TV) { drawWifi({ ssid: 'Home Wi-Fi', qr: 'WIFI:T:WPA;S:Home Wi-Fi;P:example-only;;' }); return; }
+    if (!ON_TV) { drawWifi({ ssid: 'Greenwood Home', pass: 'example-only-2026', qr: 'WIFI:T:WPA;S:Greenwood Home;P:example-only-2026;;' }); return; }
     callService('/wifi', function (r) { drawWifi(r.ok ? r : null); }, 4000);
   }
   function closeCard() { mode = 'home'; $('card').hidden = true; setFocus(pos.r, pos.c); }

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.5 — 2026-10-25
+- iPhone card: the Join home Wi-Fi side now shows the network name and the password in large type under a bigger QR code, so any guest can join: scan with any phone camera (iPhone or Android) or type it in. The card is wider to fit. The password is still kept only on the TV (Menu › Calendar & Wi-Fi).
+
 ## 0.7.4 — 2026-10-25
 - New menu item **Calendar & Wi-Fi** (between Sleep timer and Updates) opens the phone setup screen directly, instead of Menu › About › Connect calendars. The phone page connects Google Calendar (secret iCal address) and saves the home Wi-Fi password for the iPhone card QR; both stay only on the TV.
 - iPhone card: while no Wi-Fi password is saved, OK opens that setup screen. Once it is saved, the card shows the Join home Wi-Fi QR.

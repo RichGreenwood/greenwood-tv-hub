@@ -667,3 +667,17 @@ html, body { background: #011815; }
 /* Weekend colour by day: coral red Monday to Saturday (1A), soft blue on Sundays (1B) */
 .week { --weekend: #E07A6A; --weekend-on-ivory: #B5503F; }
 .week.sun-start { --weekend: #9FB4D9; --weekend-on-ivory: #4A6496; }
+
+/* 0.7.5 iPhone card: guest Wi-Fi with name, password and QR for any phone */
+.card { left: 240px; top: 190px; width: 1440px; min-height: 640px; padding: 56px 640px 56px 64px; }
+.card-wifi { width: 576px; padding: 48px 56px; }
+.cw-qr { width: 272px; height: 272px; margin-top: 20px; }
+.cw-qr svg { width: 244px; height: 244px; }
+.cw-rows { margin: 28px auto 0; width: 432px; text-align: left; }
+.cw-row { display: flex; align-items: baseline; padding: 12px 0; border-top: 1px solid rgba(235,180,44,.2); }
+.cw-row:last-child { border-bottom: 1px solid rgba(235,180,44,.2); }
+.cw-l { flex: none; width: 132px; font-size: 16px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--sage); }
+.cw-v { flex: 1; min-width: 0; font-size: 28px; font-weight: 700; line-height: 36px; color: var(--ivory); word-wrap: break-word; }
+.cw-pw { color: var(--gold); letter-spacing: 1px; word-break: break-all; }
+.cw-note { margin-top: 18px; }
+.cw-rows .cw-ssid { margin-top: 0; font-size: 28px; line-height: 36px; }

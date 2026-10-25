@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.7.4';
+var VERSION = '0.7.5';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
@@ -759,6 +759,7 @@ function wifiInfo(cb) {
     var w = readCfg().wifi || null, out = { ok: true, ssid: ssid || (w ? w.ssid : null), qr: null };
     if (w && w.pass && out.ssid && (!ssid || ssid === w.ssid)) {
       out.qr = 'WIFI:T:' + (w.type || 'WPA') + ';S:' + wifiEsc(out.ssid) + ';P:' + wifiEsc(w.pass) + ';;';
+      out.pass = w.pass;   /* shown on the card for guests; this helper answers only the hub on this TV */
     }
     cb(out);
   });
