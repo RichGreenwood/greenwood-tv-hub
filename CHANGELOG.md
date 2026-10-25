@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.1 — 2026-10-25
+- Quick play uses Ričards's own station picks (14 stations): Latvian radio (SWH Rock, Pieci, Kurzemes Radio, Latvijas Radio 2), Lounge & jazz (Lounge FM, Jazz Radio, Radio Swiss Jazz, Jazz Radio Lounge, Lounge laut.fm), Lo-fi & chill (REYFM Lo-fi, Chillax FM, Nordic Chillout Radio) and a new News & talk row (BBC World Service, France Inter).
+
 ## 0.7.0 — 2026-10-25
 - Quick play radio fixed. Each station address now gets 12 seconds to start before the next one is tried (0.6.0 could wait on "Connecting…" forever), a failed start is counted once (0.6.0 could skip the backup address), and the TV no longer tries .m3u8 streams it cannot play. Every address is also tried through the hub helper, which handles old Shoutcast servers, redirects and stations whose certificates are newer than the TV's own list (certificates are still checked). About shows the last Quick play result.
 - Week strip: on Sundays it starts with today and runs to Saturday; Monday to Saturday it is Monday to Sunday. Saturday and Sunday in their own colour: soft blue on Sundays, coral red the rest of the week.
