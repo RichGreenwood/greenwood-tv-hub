@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.7.3';
+  var VERSION = '0.7.4';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -57,6 +57,7 @@
     radio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8l9-5"/><circle cx="15.5" cy="14" r="2.5"/><path d="M6 12h4M6 15h4"/></svg>',
     about: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>',
     updates: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4h-4"/><path d="M12 8v5l3 2"/></svg>',
+    setup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="13" height="13" rx="2"/><path d="M3 9.5h13M7 3v4M12 3v4"/><path d="M17.5 14.5a4 4 0 0 1 3.5 0M16.2 12.3a7 7 0 0 1 6.1 0"/><circle cx="19.25" cy="17.25" r="0.9" fill="currentColor" stroke="none"/></svg>',
     tvinfo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M7 12l3-3 2 2 4-4"/></svg>'
   };
   var WX = {
@@ -331,7 +332,8 @@
     if (rmenu[rpos]) { rmenu[rpos].el.classList.remove('focus'); }
   }
 
-  function openCard() { mode = 'card'; $('card').hidden = false; paintWifi(); }
+  var wifiNeedsSetup = false;
+  function openCard() { mode = 'card'; wifiNeedsSetup = false; $('card').hidden = false; paintWifi(); }
   /* Wi-Fi QR on the iPhone card: the helper builds the standard WIFI: text from the network name the TV reports
      and the password saved once from the phone setup page (kept only on the TV). */
   function drawWifi(r) {
@@ -343,7 +345,8 @@
       $('cw-note').textContent = t('wifiScan');
     } else {
       qr.innerHTML = ICONS.iphone; qr.className = 'cw-qr empty';
-      $('cw-note').textContent = r && r.ssid ? t('wifiSetup') : t('wifiNone');
+      $('cw-note').textContent = r && r.ssid ? t('wifiPress') : t('wifiNone');
+      wifiNeedsSetup = !!(r && r.ssid);
     }
   }
   function paintWifi() {
@@ -1696,7 +1699,11 @@
     if (handled) { e.preventDefault(); }
     if (mode === 'idle') { leaveIdle(); return; }
     armIdle();
-    if (mode === 'card') { if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE || k === KEY.ENTER) { closeCard(); } return; }
+    if (mode === 'card') {
+      /* no Wi-Fi password on the TV yet: OK opens the phone setup screen */
+      if (k === KEY.ENTER && wifiNeedsSetup) { mode = 'home'; $('card').hidden = true; openScreen('setup'); return; }
+      if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE || k === KEY.ENTER) { closeCard(); } return;
+    }
     if (mode === 'all') { allKey(k); return; }
     if (mode === 'scr') { scrKey(k); return; }
     if (mode === 'drawer') {

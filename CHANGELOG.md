@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.4 — 2026-10-25
+- New menu item **Calendar & Wi-Fi** (between Sleep timer and Updates) opens the phone setup screen directly, instead of Menu › About › Connect calendars. The phone page connects Google Calendar (secret iCal address) and saves the home Wi-Fi password for the iPhone card QR; both stay only on the TV.
+- iPhone card: while no Wi-Fi password is saved, OK opens that setup screen. Once it is saved, the card shows the Join home Wi-Fi QR.
+- The phone page confirms what it saved (calendars, Wi-Fi or both).
+
 ## 0.7.3 — 2026-10-25
 - Quick play no longer cuts itself off. A short gap in a station's data ("stalled") no longer counts as a failure: sound keeps playing from the buffer, and if the buffer runs dry the hub waits up to 12 s for the sound to move again before it reconnects. The 20-second no-sound check only runs once the clock has been seen moving.
 - About › Quick play now also shows how many times the station reconnected in the last hour and why, to tell a weak connection from a station problem.

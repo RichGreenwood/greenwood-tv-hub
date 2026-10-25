@@ -83,6 +83,11 @@
       "group": "hub"
     },
     {
+      "id": "setup",
+      "label": "Calendar & Wi-Fi",
+      "group": "hub"
+    },
+    {
       "id": "updates",
       "label": "Updates",
       "group": "hub"

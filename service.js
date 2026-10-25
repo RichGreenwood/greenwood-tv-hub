@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.7.3';
+var VERSION = '0.7.4';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
@@ -843,7 +843,7 @@ var SETUP_PAGE = '<!doctype html><html lang="en"><head><meta charset="utf-8"><me
   'button{margin-top:26px;width:100%;padding:15px;border:0;border-radius:999px;background:#EBB42C;color:#012B28;font-size:17px;font-weight:800}' +
   '#m{margin-top:18px;font-weight:700}.ok{color:#7CC4A4}.bad{color:#E8A15A}details{margin-top:28px;color:#A9BDB7}summary{cursor:pointer;color:#F4F2EC}' +
   'ol{padding-left:20px}li{margin:4px 0}</style></head><body><div class="w">' +
-  '<h1>Connect calendars</h1><p>Greenwood TV shows meeting times and titles. The links stay on the TV only.</p>' +
+  '<h1>Calendar &amp; Wi-Fi</h1><p>Greenwood TV shows meeting times and titles. The links stay on the TV only.</p>' +
   '<label>Code on the TV</label><input id="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456">' +
   '<label>Calendar 1<small>Name, then its secret iCal address</small></label><div class="row"><input id="l1" value="Personal"><input id="u1" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></div>' +
   '<label>Calendar 2 <small>Optional</small></label><div class="row"><input id="l2" value="Aerones"><input id="u2" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></div>' +
@@ -859,7 +859,7 @@ var SETUP_PAGE = '<!doctype html><html lang="en"><head><meta charset="utf-8"><me
   'b.onclick=function(){var c=[];if(v("u1"))c.push({label:v("l1")||"Calendar 1",url:v("u1")});if(v("u2"))c.push({label:v("l2")||"Calendar 2",url:v("u2")});' +
   'var w=v("wp")?{ssid:v("ws"),pass:document.getElementById("wp").value}:null;if(!c.length&&!w){m.className="bad";m.textContent="Paste a calendar link or a Wi-Fi password.";return;}b.disabled=true;m.className="";m.textContent="Sending…";' +
   'var x=new XMLHttpRequest();x.open("POST","/setup");x.setRequestHeader("Content-Type","application/json");' +
-  'x.onload=function(){var r={};try{r=JSON.parse(x.responseText);}catch(e){}if(r.ok){m.className="ok";m.textContent="Done ✓ "+r.count+" calendar(s) saved. You can close this page.";}' +
+  'x.onload=function(){var r={};try{r=JSON.parse(x.responseText);}catch(e){}if(r.ok){m.className="ok";m.textContent="Done ✓ Saved: "+[r.count?r.count+" calendar(s)":"",r.wifi?"Wi-Fi":""].filter(Boolean).join(" + ")+". You can close this page.";}' +
   'else{b.disabled=false;m.className="bad";m.textContent=r.error||"Did not work. Check the code and links.";}};' +
   'x.onerror=function(){b.disabled=false;m.className="bad";m.textContent="TV not reachable. Is the code still on the TV?";};' +
   'x.send(JSON.stringify({pin:v("pin").replace(/\\D/g,""),calendars:c,wifi:w}));};' +
