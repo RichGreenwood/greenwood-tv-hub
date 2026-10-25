@@ -1,5 +1,7 @@
 # Data credits
 
+- `../img/land-1024.png`: land mask rasterised from Natural Earth 1:50m land (public domain, naturalearthdata.com).
+
 - `namedays-lv.json`: Latvian name day calendar from [slikts/vardadienas](https://github.com/slikts/vardadienas) (MIT License, © 2017 slikts), based on laacz's list. Format `{ "MM-DD": [names] }`.
 
 ## License (slikts/vardadienas)

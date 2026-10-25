@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.5.2';
+  var VERSION = '0.6.0';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -52,6 +52,9 @@
     daylight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20"/><path d="M5 18a7 7 0 0 1 14 0"/><circle cx="15.5" cy="11.5" r="1.8"/></svg>',
     look: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M12 3.5a8.5 8.5 0 0 1 0 17"/></svg>',
     sleep: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5M9 2h6"/></svg>',
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>',
+    radio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8l9-5"/><circle cx="15.5" cy="14" r="2.5"/><path d="M6 12h4M6 15h4"/></svg>',
     about: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>'
   };
   var WX = {
@@ -201,7 +204,7 @@
 
   /* ---------- Home tiles ---------- */
   function iconFor(id) { return id.indexOf('hdmi') === 0 ? ICONS.hdmi : (ICONS[id] || ''); }
-  var SPECIAL = { iphone: 1, apps: 1, idle: 1, night: 1, calendar: 1, weather: 1, daylight: 1, look: 1, sleep: 1, about: 1 };
+  var SPECIAL = { iphone: 1, apps: 1, idle: 1, night: 1, calendar: 1, weather: 1, daylight: 1, look: 1, sleep: 1, about: 1, radio: 1, 'qp-toggle': 1, 'qp-pick': 1 };
   function isLinked(id) { return !!SPECIAL[id] || !!apps[id]; }
   function labelL(lang, item, kind) {
     var d = dict(lang);
@@ -238,17 +241,28 @@
   }
 
   function buildRows() {
+    var qh = $('row-qp');
+    qh.innerHTML = '';
+    var qrow = [];
+    var tg = document.createElement('div');
+    tg.className = 't qp-tile'; tg.id = 'qp-toggle';
+    tg.innerHTML = '<span class="qp-ic"></span><span class="qp-tx"><span class="qp-nm"></span><span class="qp-st"></span></span><span class="qp-eq"><i></i><i></i><i></i><i></i></span>';
+    qh.appendChild(tg); qrow.push({ id: 'qp-toggle', el: tg, kind: 'qp', label: t('radioTitle') });
+    var pk = document.createElement('div');
+    pk.className = 't qp-pick'; pk.innerHTML = ICONS.radio + '<span>' + esc(t('qpStations')) + '</span>';
+    qh.appendChild(pk); qrow.push({ id: 'qp-pick', el: pk, kind: 'qp', label: t('qpStations') });
     var defs = [
       { list: theme.watch || [], host: 'row-watch', kind: 'app' },
       { list: theme.connect || [], host: 'row-connect', kind: 'pill' }
     ];
-    rows = [];
+    rows = [qrow];
     defs.forEach(function (d) {
       var host = $(d.host);
       host.innerHTML = '';
       var row = d.list.map(function (item) { var tile = makeTile(item, d.kind); host.appendChild(tile.el); return tile; });
       if (row.length) { rows.push(row); }
     });
+    renderRadio();
     var mh = $('menu');
     mh.innerHTML = '';
     var lastGroup = '';
@@ -327,6 +341,7 @@
   /* ---------- Actions ---------- */
   function launchAppId(appId, label, countKey) {
     if (!appId) { toast(label + ': not linked yet'); return; }
+    radioStop();
     if (!ON_TV) { toast('Preview: would open ' + label); return; }
     if (HAS_TIZEN) {
       try {
@@ -344,6 +359,7 @@
 
   var KEY_HINT = { KEY_MENU: 'the ⚙ button', KEY_SOURCE: 'the Source button', KEY_HOME: 'the Home button' };
   function sendKey(keyCode, label) {
+    if (/HDMI|SOURCE|HOME|MENU/.test(keyCode)) { radioStop(); }
     if (!ON_TV) { toast('Preview: ' + label + ' → remote key ' + keyCode); return; }
     callService('/key?k=' + encodeURIComponent(keyCode), function (r) {
       if (r.ok) { return; }
@@ -364,6 +380,8 @@
   function runTarget(id) {
     var label = labelOf(id);
     if (id === 'iphone') { hideDrawers(); openCard(); return; }
+    if (id === 'qp-toggle') { radioToggle(); return; }
+    if (id === 'qp-pick') { openScreen('radio'); return; }
     if (id === 'apps') { openAll(); return; }
     if (id === 'idle') { forceNight = false; enterIdle(); return; }
     if (id === 'night') { forceNight = true; enterIdle(); return; }
@@ -595,33 +613,86 @@
       title: function (lang) { return tl(lang, 'wxTitle'); },
       html: function () {
         var w = store('weather');
-        var d = w && w.daily ? w.daily : null;
         var place = (theme.weather && theme.weather.place) || '';
-        if (!d) { return '<div class="scr-empty"><div class="scr-big">' + esc(place + ' · ' + t('wxNA')) + '</div></div>'; }
-        var html = '<div class="wx-place">' + esc(place) + ', ' + esc(t('wxNext')) + '</div><div class="wx-days">';
-        for (var i = 0; i < Math.min(3, d.time.length); i++) {
+        if (!w || !w.daily) { return '<div class="scr-empty"><div class="scr-big">' + esc(place + ' · ' + t('wxNA')) + '</div></div>'; }
+        var d = w.daily, hrs = wxHours(w, 24);
+        /* hero */
+        var feels = w.feels !== undefined ? Math.round(w.feels) : null;
+        var hero = '<div class="wh-hero"><div class="wh-ic">' + wxIcon(w.code, w.day) + '</div><div class="wh-now">' +
+          '<div class="wh-t">' + Math.round(w.t) + '°</div><div class="wh-c">' + esc(wmo(w.code)) +
+          (hasSecond() ? '<span class="sec-inline">' + esc(wmoL(prefs.lang2, w.code)) + '</span>' : '') + '</div>' +
+          '<div class="wh-hl">' + (feels !== null ? esc(fmt(t('wxFeels'), feels)) + ' · ' : '') + '↑ ' + Math.round(d.max[0]) + '°  ↓ ' + Math.round(d.min[0]) + '°</div></div>' +
+          '<div class="wh-sum">' + wxSummary(w).map(function (s) { return '<div class="wh-line">' + s + '</div>'; }).join('') + '</div></div>';
+        /* details */
+        function tile(icon, k, v, sub) { return '<div class="wd"><div class="wd-k">' + icon + esc(t(k)) + '</div><div class="wd-v">' + v + '</div>' + (sub ? '<div class="wd-s">' + esc(sub) + '</div>' : '') + '</div>'; }
+        var det = '<div class="wh-det">' +
+          tile(WI.wind, 'wxWind', (w.wind !== undefined ? Math.round(w.wind) : '–') + '<small> m/s</small>' + (w.dir !== undefined ? '<i class="wd-arrow" style="transform:rotate(' + Math.round(w.dir + 180) + 'deg)">↑</i>' : ''),
+            (w.gust !== undefined ? fmt(t('wxGusts'), Math.round(w.gust)) : '') + (w.dir !== undefined ? ' · ' + compass(w.dir) : '')) +
+          tile(WI.drop, 'wxRainToday', (d.psum ? (Math.round(d.psum[0] * 10) / 10) : 0) + '<small> mm</small>', d.ppmax ? fmt(t('wxChance'), d.ppmax[0]) : '') +
+          tile(WI.hum, 'wxHumidity', (w.hum !== undefined ? Math.round(w.hum) : '–') + '<small>%</small>', '') +
+          tile(WI.uv, 'wxUV', d.uvmax ? Math.round(d.uvmax[0]) : '–', d.uvmax ? uvLabel(d.uvmax[0]) : '') +
+          tile(WI.gauge, 'wxPressure', (w.pres !== undefined ? Math.round(w.pres) : '–') + '<small> hPa</small>', '') +
+          tile(WI.sun, 'wxSun', d.sunrise && d.sunrise[0] ? d.sunrise[0].slice(11, 16) + '<small> → </small>' + d.sunset[0].slice(11, 16) : '–', '') +
+          '</div>';
+        /* week */
+        var lo = Math.min.apply(null, d.min), hi = Math.max.apply(null, d.max), span = Math.max(1, hi - lo);
+        var week = '<div class="wk7">';
+        for (var i = 0; i < Math.min(7, d.time.length); i++) {
           var dt = new Date(d.time[i] + 'T12:00:00');
-          var name = i === 0 ? t('todayT') : t('days')[dt.getDay()];
-          var c2 = hasSecond() ? wmoL(prefs.lang2, d.code[i]) : '';
-          html += '<div class="wx-day fx"><div class="wx-dn">' + esc(name) + '</div><div class="wx-ic">' + wxIcon(d.code[i], 1) + '</div>' +
-            '<div class="wx-t">' + Math.round(d.max[i]) + '°<span> / ' + Math.round(d.min[i]) + '°</span></div><div class="wx-c">' + esc(wmo(d.code[i])) + '</div>' +
-            (c2 ? '<div class="wx-c2">' + esc(c2) + '</div>' : '') + '</div>';
+          var l = (d.min[i] - lo) / span * 100, r = (d.max[i] - lo) / span * 100;
+          week += '<div class="w7 fx"><div class="w7-d">' + esc(i === 0 ? t('todayT') : t('daysShort')[dt.getDay()]) + '</div><div class="w7-ic">' + wxIcon(d.code[i], 1) + '</div>' +
+            '<div class="w7-p">' + (d.ppmax && d.ppmax[i] >= 20 ? WI.drop + d.ppmax[i] + '%' : '&nbsp;') + '</div>' +
+            '<div class="w7-t"><b>' + Math.round(d.max[i]) + '°</b> ' + Math.round(d.min[i]) + '°</div>' +
+            '<div class="w7-bar"><i style="left:' + l.toFixed(0) + '%;width:' + Math.max(6, r - l).toFixed(0) + '%"></i></div></div>';
         }
-        html += '</div>';
-        if (d.sunrise && d.sunrise[0]) {
-          html += '<div class="wx-sun">' + esc(t('sunrise')) + ' <b>' + d.sunrise[0].slice(11, 16) + '</b> · ' + esc(t('sunset')) + ' <b>' + d.sunset[0].slice(11, 16) + '</b></div>';
-        }
-        return html;
-      }
+        week += '</div>';
+        return '<div class="wx2">' + hero + det + '<div class="wx-sec">' + esc(t('wxNext24')) + '</div><svg class="wx-chart" id="wx-chart" viewBox="0 0 1728 236" width="1728" height="236"></svg>' + week + '</div>';
+      },
+      init: function () { drawWxChart($('wx-chart'), wxHours(store('weather'), 24)); }
     },
     daylight: {
       title: function (lang) { return tl(lang, 'dlTitle'); },
       html: function () {
-        return '<div class="dl"><svg class="dl-svg" id="dl-svg" viewBox="0 0 1500 520" width="1500" height="520"></svg><div class="dl-cap" id="dl-cap"></div><div class="dl-cap2" id="dl-cap2"></div></div>';
+        return '<div class="dl2">' +
+          '<div class="dl-left" id="dl-left"></div>' +
+          '<div class="dl-mid"><svg class="dl-arc" id="dl-svg" viewBox="0 0 1060 600" width="1060" height="600"></svg>' +
+            '<div class="globe-wrap" id="globe-wrap"><canvas id="globe" width="400" height="400"></canvas><div class="globe-rim"></div><div class="globe-tag">' + esc((theme.weather && theme.weather.place) || '') + '</div></div>' +
+            '<div class="dl-cap" id="dl-cap"></div><div class="dl-cap2" id="dl-cap2"></div></div>' +
+          '<div class="dl-right" id="dl-right"></div>' +
+          '<div class="dl-year"><div class="dl-year-k">' + esc(t('dlYear')) + '</div><svg id="dl-year" viewBox="0 0 1728 120" width="1728" height="120"></svg></div>' +
+          '</div>';
       },
       init: function () {
-        drawSun($('dl-svg'), $('dl-cap'), $('dl-cap2'), 1500, 520, true);
-        scr.timer = setInterval(function () { drawSun($('dl-svg'), $('dl-cap'), $('dl-cap2'), 1500, 520, true); }, 60000);
+        function paint() {
+          drawSun($('dl-svg'), $('dl-cap'), $('dl-cap2'), 1060, 600, 'globe');
+          paintSunFacts($('dl-left'));
+          paintMoon($('dl-right'));
+          paintYear($('dl-year'));
+        }
+        paint();
+        globeStart($('globe'));
+        scr.timer = setInterval(paint, 60000);
+        scr.onBack = globeStop;
+      }
+    },
+    radio: {
+      title: function (lang) { return tl(lang, 'radioTitle'); },
+      html: function () {
+        return '<div class="rd">' + radio.groups.map(function (g) {
+          return '<div class="rd-g"><div class="rd-gk">' + esc(t('rg_' + g.id)) + '</div><div class="rd-row">' + g.stations.map(function (s) {
+            var cur = radio.cur && radio.cur.id === s.id;
+            return '<div class="rd-st fx' + (cur ? ' sel' : '') + '" data-act="play" data-v="' + esc(s.id) + '"><div class="rd-nm">' + esc(s.name) + '</div><div class="rd-sub">' +
+              esc(cur && radio.state !== 'off' ? t('radioOn') : s.sub || '') + '</div></div>';
+          }).join('') + '</div></div>';
+        }).join('') + '<div class="scr-note small">' + esc(t('radioNote')) + '</div></div>';
+      },
+      init: function () {
+        var sel = $('scr-body').querySelector('.rd-st.sel');
+        if (sel) { setScrFocus(scr.fx.indexOf(sel)); }
+      },
+      act: function (a, v) {
+        var st = radio.list.filter(function (s) { return s.id === v; })[0];
+        if (st) { radioPlay(st); closeScreen(); }
       }
     },
     look: {
@@ -689,6 +760,7 @@
         if (updInfo && updInfo.previous && updInfo.previous !== 'v' + updInfo.current) { ub += '<div class="btn fx" data-act="update" data-v="' + esc(updInfo.previous) + '">' + esc(fmt(t('updPrev'), updInfo.previous)) + '</div>'; }
         return '<div class="ab"><div class="ab-rows" id="ab-rows"></div><div class="ab-btns">' + ub +
           '<div class="btn fx" data-act="setup">' + esc(t('calConnect')) + '</div>' +
+          '<div class="btn fx" data-act="keytest">' + esc(t('keyTest')) + '</div>' +
           '<div class="btn fx" data-act="refresh">' + esc(t('calRefresh')) + '</div>' +
           (calData.configured ? '<div class="btn fx" data-act="forget">' + esc(t('calForget')) + '</div>' : '') + '</div></div>';
       },
@@ -705,6 +777,11 @@
           html += row(t('a_calendar'), cals.length ? cals.join(' + ') + ' · ' + agoText(s.calendarAt) + (calErr ? ' · ' + s.calendarErrors[0].error : '') : t('never'), cals.length ? (calErr ? 'warn' : 'ok') : 'warn');
           html += row(t('a_storage'), s && s.storage ? mb(s.storage.free) + ' / ' + mb(s.storage.total) : '—', s && s.storage && s.storage.free < 100 * 1024 * 1024 ? 'warn' : 'ok');
           html += row(t('a_network'), s && s.ip ? s.ip : '\u2014', s && s.ip ? 'ok' : 'warn');
+          if (s) {
+            var kl = s.keyLog && s.keyLog.length ? s.keyLog[s.keyLog.length - 1] : '';
+            html += row(t('a_lastKey'), kl ? kl.slice(0, 64) : '\u2014', !kl ? 'warn' : /^\S+ ok /.test(kl) ? 'ok' : 'bad');
+            html += row(t('a_apps'), s.appsFrom === 'samsung' ? t('appsSamsung') : s.appsFrom === 'tizen' ? t('appsTizen') : '\u2014', s.appsFrom === 'samsung' ? 'ok' : 'warn');
+          }
           html += row(t('a_updates'), !updInfo ? '\u2014' : updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate') + ' \u00B7 v' + VERSION, updInfo && updInfo.newer ? 'warn' : 'ok');
           $('ab-rows').innerHTML = html;
         }
@@ -715,6 +792,13 @@
         if (a === 'setup') { renderScreen('setup'); }
         else if (a === 'check') { checkUpdate(true, function () { if (scr.id === 'about') { renderScreen('about', 0); } toast(updInfo && updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate')); }); }
         else if (a === 'update') { runUpdate(v); }
+        else if (a === 'keytest') {
+          if (!ON_TV) { toast(t('keyTestOk')); return; }
+          callService('/key?k=KEY_VOLUP', function (r1) {
+            if (!r1.ok) { toast(fmt(t('keyTestFail'), (r1.error || '?') + (r1.detail ? ' / ' + r1.detail : ''))); renderScreen('about', scr.f); return; }
+            callService('/key?k=KEY_VOLDOWN', function () { toast(t('keyTestOk')); renderScreen('about', scr.f); }, 70000);
+          }, 70000);
+        }
         else if (a === 'refresh') { loadCalendar(true, function () { toast(t('calRefresh') + ' ✓'); if (scr.id === 'about') { renderScreen('about', scr.f); } }); }
         else if (a === 'forget') { callService('/setup/forget', function () { calData = { configured: 0, events: [], at: 0 }; store('cal', calData); renderAgenda(); renderWeek(); renderScreen('about', 0); }); }
       }
@@ -862,7 +946,7 @@
   }
 
   /* ---------- Sun path (sunrise/sunset from the weather data, or calculated for the place) ---------- */
-  function sunCalc(date, lat, lon) {
+  function sunCalc(date, lat, lon, alt) {
     var rad = Math.PI / 180;
     var jd = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12) / 86400000 + 2440587.5;
     var n = Math.round(jd - 2451545.0 + 0.0008);
@@ -872,7 +956,7 @@
     var lam = (M + C + 180 + 102.9372) % 360;
     var jt = 2451545.0 + js + 0.0053 * Math.sin(M * rad) - 0.0069 * Math.sin(2 * lam * rad);
     var dec = Math.asin(Math.sin(lam * rad) * Math.sin(23.44 * rad));
-    var cw = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * Math.sin(dec)) / (Math.cos(lat * rad) * Math.cos(dec));
+    var cw = (Math.sin((alt === undefined ? -0.833 : alt) * rad) - Math.sin(lat * rad) * Math.sin(dec)) / (Math.cos(lat * rad) * Math.cos(dec));
     if (cw > 1) { return { polar: 'night' }; }
     if (cw < -1) { return { polar: 'day' }; }
     var w = Math.acos(cw) / rad;
@@ -910,9 +994,10 @@
     var prevSet, nextRise;
     if (now < today.rise) { var y = sunFor(-1); prevSet = y.set || today.set - 86400000; nextRise = today.rise; }
     else { var tm = sunFor(1); prevSet = today.set; nextRise = tm.rise || today.rise + 86400000; }
-    var id = big ? 'b' : 's';
-    var padX = big ? 190 : 104, base = big ? 300 : 150;
-    var rx = (W - padX * 2) / 2, ryDay = big ? 230 : 112, ryNight = big ? 100 : 44;
+    var G = big === 'globe';
+    var id = G ? 'g' : big ? 'b' : 's';
+    var padX = G ? 120 : big ? 190 : 104, base = G ? 300 : big ? 300 : 150;
+    var rx = (W - padX * 2) / 2, ryDay = G ? 282 : big ? 230 : 112, ryNight = G ? 262 : big ? 100 : 44;
     var x0 = padX, x1 = W - padX, cx = W / 2;
     function dayPt(f) { var a = Math.PI * (1 - f); return [cx + rx * Math.cos(a), base - ryDay * Math.sin(a)]; }
     function nightPt(f) { var a = Math.PI * f; return [cx + rx * Math.cos(a), base + ryNight * Math.sin(a)]; }
@@ -943,8 +1028,10 @@
     }
     s += txt(x0 - gap, ly, fs, 700, '#F4F2EC', hhmm(today.rise), 'end') + txt(x0 - gap, ly + fsm + 6, fsm, 500, '#A9BDB7', t('sunrise'), 'end');
     s += txt(x1 + gap, ly, fs, 700, '#F4F2EC', hhmm(today.set), 'start') + txt(x1 + gap, ly + fsm + 6, fsm, 500, '#A9BDB7', t('sunset'), 'start');
+    if (!G) {
     s += txt(cx, base - (big ? 84 : 52), fsm, 600, '#A9BDB7', t('daylight').toUpperCase(), 'middle', ' letter-spacing="3"');
     s += '<text x="' + cx + '" y="' + (base - (big ? 26 : 16)) + '" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-size="' + (big ? 56 : 34) + '" font-weight="600" fill="#F4F2EC" style="font-variant-numeric:lining-nums">' + esc(dur(today.set - today.rise)) + '</text>';
+    }
     if (isDay) {
       s += '<circle cx="' + px + '" cy="' + py + '" r="' + (big ? 48 : 30) + '" fill="url(#sunG' + id + ')" opacity=".6"/>';
       s += '<circle cx="' + px + '" cy="' + py + '" r="' + (big ? 15 : 10) + '" fill="#F6C94E" stroke="#FFF1C2" stroke-width="2"/>';
@@ -960,6 +1047,317 @@
     }
   }
   function renderSun() { drawSun($('sun-svg'), $('sun-cap'), null, 724, 250, false); }
+
+  /* ---------- Weather details (hourly, summary, chart) ---------- */
+  var WI = {
+    wind: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7"/></svg>',
+    drop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>',
+    hum: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4s4 4.4 4 7.4a4 4 0 0 1-8 0C3 8.4 7 4 7 4zM17 9s4 4.4 4 7.4a4 4 0 0 1-8 0c0-3 4-7.4 4-7.4z"/></svg>',
+    uv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>',
+    gauge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-5"/></svg>',
+    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 18h20M5 18a7 7 0 0 1 14 0M12 5v2M5 9l1.5 1.5M19 9l-1.5 1.5"/></svg>'
+  };
+  function localMs(s) { var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(s || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0; }
+  /* next n hours starting with the current hour */
+  function wxHours(w, n) {
+    var h = w && w.hourly;
+    if (!h || !h.time) { return []; }
+    var now = new Date(); now.setMinutes(0, 0, 0);
+    var out = [];
+    for (var i = 0; i < h.time.length && out.length < n; i++) {
+      var ms = localMs(h.time[i]);
+      if (ms < now.getTime()) { continue; }
+      out.push({ ms: ms, t: h.t[i], pp: h.pp ? h.pp[i] : 0, pr: h.pr ? h.pr[i] : 0, code: h.code[i], day: h.day ? h.day[i] : 1, wind: h.wind ? h.wind[i] : 0, gust: h.gust ? h.gust[i] : 0 });
+    }
+    return out;
+  }
+  function compass(deg) { return t('compass')[Math.round(((deg % 360) + 360) % 360 / 45) % 8]; }
+  function uvLabel(v) { return v < 3 ? t('uvLow') : v < 6 ? t('uvMod') : v < 8 ? t('uvHigh') : t('uvVHigh'); }
+  /* plain-language view of the next hours */
+  function wxSummary(w) {
+    var out = [], hrs = wxHours(w, 15), d = w.daily;
+    var rainStart = null, rainMax = 0, rainEnd = null;
+    hrs.forEach(function (h) {
+      if (h.pp >= 50 || h.pr >= 0.3) { if (rainStart === null) { rainStart = h.ms; } rainEnd = h.ms + 3600000; rainMax = Math.max(rainMax, h.pp); }
+    });
+    if (rainStart === null) { out.push(esc(t('wxDry'))); }
+    else if (rainStart <= Date.now() + 1800000) { out.push(esc(fmt(t('wxRainNow'), hhmm(rainEnd))) + ' <b>' + rainMax + '%</b>'); }
+    else { out.push(esc(fmt(t('wxRainFrom'), hhmm(rainStart))) + ' <b>' + rainMax + '%</b>'); }
+    var gmax = 0; hrs.forEach(function (h) { gmax = Math.max(gmax, h.gust || 0); });
+    if (gmax >= 12) { out.push(esc(fmt(t('wxWindy'), Math.round(gmax)))); }
+    else if (gmax > 0 && gmax < 6) { out.push(esc(t('wxCalm'))); }
+    if (w.feels !== undefined && Math.abs(w.feels - w.t) >= 3) { out.push(esc(fmt(t('wxFeelsLine'), Math.round(w.feels)))); }
+    if (d && d.max && d.max.length > 1) {
+      var diff = Math.round(d.max[1] - d.max[0]);
+      out.push(esc(diff >= 2 ? fmt(t('wxWarmer'), diff) : diff <= -2 ? fmt(t('wxColder'), -diff) : t('wxSimilar')));
+    }
+    return out.slice(0, 4);
+  }
+  /* 24 h: temperature line, rain bars, icons every 3 h */
+  function drawWxChart(svg, hrs) {
+    if (!svg || !hrs.length) { return; }
+    var W = 1728, H = 236, top = 44, bot = 168, n = hrs.length, step = W / n;
+    var tmin = Infinity, tmax = -Infinity;
+    hrs.forEach(function (h) { tmin = Math.min(tmin, h.t); tmax = Math.max(tmax, h.t); });
+    if (tmax - tmin < 4) { var m = (tmax + tmin) / 2; tmin = m - 2; tmax = m + 2; }
+    function y(v) { return bot - (v - tmin) / (tmax - tmin) * (bot - top - 26); }
+    var s = '<defs><linearGradient id="wxT" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EBB42C" stop-opacity=".22"/><stop offset="100%" stop-color="#EBB42C" stop-opacity="0"/></linearGradient></defs>';
+    /* rain bars */
+    hrs.forEach(function (h, i) {
+      if (h.pp > 0) { var bh = h.pp / 100 * 70; s += '<rect x="' + (i * step + step * 0.22).toFixed(1) + '" y="' + (bot - bh).toFixed(1) + '" width="' + (step * 0.56).toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="3" fill="#7FB3C9" fill-opacity="' + (0.25 + h.pp / 160).toFixed(2) + '"/>'; }
+    });
+    var pts = hrs.map(function (h, i) { return [(i + 0.5) * step, y(h.t)]; });
+    var line = 'M' + pts.map(function (p) { return p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' L');
+    s += '<path d="' + line + ' L' + pts[n - 1][0].toFixed(1) + ' ' + bot + ' L' + pts[0][0].toFixed(1) + ' ' + bot + ' Z" fill="url(#wxT)"/>';
+    s += '<path d="' + line + '" fill="none" stroke="#EBB42C" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>';
+    s += '<line x1="0" y1="' + bot + '" x2="' + W + '" y2="' + bot + '" stroke="#A9BDB7" stroke-opacity=".3"/>';
+    hrs.forEach(function (h, i) {
+      var x = (i + 0.5) * step;
+      if (i % 3 === 0) {
+        s += '<circle cx="' + x.toFixed(1) + '" cy="' + pts[i][1].toFixed(1) + '" r="5" fill="#012B28" stroke="#EBB42C" stroke-width="2.5"/>';
+        s += '<text x="' + x.toFixed(1) + '" y="' + (pts[i][1] - 14).toFixed(1) + '" text-anchor="middle" font-family="Manrope, Arial" font-size="22" font-weight="700" fill="#F4F2EC">' + Math.round(h.t) + '°</text>';
+        s += '<text x="' + x.toFixed(1) + '" y="' + (bot + 30) + '" text-anchor="middle" font-family="Manrope, Arial" font-size="19" fill="#A9BDB7">' + (i === 0 ? esc(t('now')) : pad2(new Date(h.ms).getHours())) + '</text>';
+        if (h.pp >= 30) { s += '<text x="' + x.toFixed(1) + '" y="' + (bot + 52) + '" text-anchor="middle" font-family="Manrope, Arial" font-size="17" fill="#7FB3C9">' + h.pp + '%</text>'; }
+      }
+    });
+    svg.innerHTML = s;
+  }
+  /* idle: next 5 hours */
+  function renderIdleHours() {
+    var box = $('idle-hours');
+    if (!box) { return; }
+    var hrs = wxHours(store('weather'), 6).slice(1, 6);
+    box.innerHTML = hrs.map(function (h) {
+      return '<div class="ih"><div class="ih-h">' + pad2(new Date(h.ms).getHours()) + ':00</div><div class="ih-ic">' + wxIcon(h.code, h.day) + '</div>' +
+        '<div class="ih-t">' + Math.round(h.t) + '°</div><div class="ih-p">' + (h.pp >= 20 ? h.pp + '%' : '&nbsp;') + '</div></div>';
+    }).join('');
+  }
+  /* ---------- Daylight details: twilight, golden hour, moon, year curve ---------- */
+  function sunAt(dayOffset, alt) {
+    var cfg = theme.weather || {};
+    return sunCalc(new Date(dayStart(dayOffset)), +cfg.latitude || 56.95, +cfg.longitude || 24.11, alt);
+  }
+  function paintSunFacts(box) {
+    if (!box) { return; }
+    var s = sunFor(0), civ = sunAt(0, -6), gold = sunAt(0, 6), y = sunFor(-1);
+    function row(k, v, cls) { return '<div class="sf' + (cls ? ' ' + cls : '') + '"><span class="sf-k">' + esc(t(k)) + '</span><span class="sf-v">' + v + '</span></div>'; }
+    var calc = sunAt(0, -0.833);
+    if (s.polar) { box.innerHTML = '<div class="dl-h">' + esc(t('dlSun')) + '</div>' + row('daylight', esc(s.polar === 'day' ? t('polarDay') : t('polarNight'))); return; }
+    var len = s.set - s.rise, diff = (y.rise && y.set) ? Math.round((len - (y.set - y.rise)) / 60000) : 0;
+    var noon = (s.rise + s.set) / 2;
+    box.innerHTML = '<div class="dl-h">' + esc(t('dlSun')) + '</div>' +
+      row('dlDawn', civ.rise ? hhmm(civ.rise) : '–') +
+      row('sunrise', hhmm(s.rise), 'hi') +
+      row('dlGoldAm', gold.rise && calc.rise ? hhmm(calc.rise) + '–' + hhmm(gold.rise) : '–') +
+      row('dlNoon', hhmm(noon)) +
+      row('dlGoldPm', gold.set && calc.set ? hhmm(gold.set) + '–' + hhmm(calc.set) : '–') +
+      row('sunset', hhmm(s.set), 'hi') +
+      row('dlDusk', civ.set ? hhmm(civ.set) : '–') +
+      '<div class="sf-len"><div class="sf-len-v">' + esc(dur(len)) + '</div><div class="sf-len-d">' + esc(fmt(diff >= 0 ? t('dlLonger') : t('dlShorter'), Math.abs(diff))) + '</div></div>';
+  }
+  function moonInfo(ms) {
+    var syn = 29.530588, age = (((ms / 86400000 - 10962.76) % syn) + syn) % syn;
+    var frac = age / syn, illum = Math.round((1 - Math.cos(2 * Math.PI * frac)) / 2 * 100);
+    var idx = Math.floor((frac * 8) + 0.5) % 8;
+    return { age: age, frac: frac, illum: illum, idx: idx,
+      nextFull: ms + (((syn / 2 - age) % syn) + syn) % syn * 86400000, nextNew: ms + (syn - age) * 86400000 };
+  }
+  function shortDate(ms) { var d = new Date(ms); return t('daysShort')[d.getDay()] + ' ' + d.getDate() + '. ' + t('monthsShort')[d.getMonth()]; }
+  function paintMoon(box) {
+    if (!box) { return; }
+    var m = moonInfo(Date.now());
+    box.innerHTML = '<div class="dl-h">' + esc(t('dlMoon')) + '</div>' +
+      '<svg class="moon-big" viewBox="0 0 100 100" width="200" height="200"><defs><radialGradient id="mbLit" cx="42%" cy="38%" r="70%"><stop offset="0%" stop-color="#FFF9E6"/><stop offset="70%" stop-color="#EFD9A0"/><stop offset="100%" stop-color="#C9A55A"/></radialGradient></defs>' +
+      '<circle cx="50" cy="50" r="32" fill="#0B3A35" stroke="#A9BDB7" stroke-opacity=".35"/><path d="' + moonPath(m.frac) + '" fill="url(#mbLit)"/></svg>' +
+      '<div class="moon-name">' + esc(t('moonPhases')[m.idx]) + '</div>' +
+      '<div class="sf"><span class="sf-k">' + esc(t('moonLit')) + '</span><span class="sf-v">' + m.illum + '%</span></div>' +
+      '<div class="sf"><span class="sf-k">' + esc(t('moonAge')) + '</span><span class="sf-v">' + Math.floor(m.age) + ' ' + esc(t('daysWord')) + '</span></div>' +
+      '<div class="sf"><span class="sf-k">' + esc(t('moonFull')) + '</span><span class="sf-v">' + esc(shortDate(m.nextFull)) + '</span></div>' +
+      '<div class="sf"><span class="sf-k">' + esc(t('moonNew')) + '</span><span class="sf-v">' + esc(shortDate(m.nextNew)) + '</span></div>';
+  }
+  /* day length through the year with today, shortest and longest day */
+  function paintYear(svg) {
+    if (!svg) { return; }
+    var cfg = theme.weather || {}, lat = +cfg.latitude || 56.95, lon = +cfg.longitude || 24.11;
+    var yr = new Date().getFullYear(), W = 1728, H = 120, pts = [], lens = [];
+    for (var d = 0; d < 366; d += 3) {
+      var dt = new Date(yr, 0, 1 + d), s = sunCalc(dt, lat, lon);
+      lens.push(s.polar === 'day' ? 24 : s.polar === 'night' ? 0 : (s.set - s.rise) / 3600000);
+    }
+    var mx = Math.max.apply(null, lens), mn = Math.min.apply(null, lens);
+    lens.forEach(function (v, i) { pts.push([i / (lens.length - 1) * W, 96 - (v - mn) / Math.max(0.1, mx - mn) * 76]); });
+    var path = 'M' + pts.map(function (p) { return p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' L');
+    var doy = (dayStart(0) - new Date(yr, 0, 1).getTime()) / 86400000, tx = doy / 365 * W;
+    var ti = Math.min(lens.length - 1, Math.round(doy / 3)), ty = pts[ti][1];
+    var s2 = '<defs><linearGradient id="yrF" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EBB42C" stop-opacity=".18"/><stop offset="100%" stop-color="#EBB42C" stop-opacity="0"/></linearGradient></defs>';
+    s2 += '<path d="' + path + ' L' + W + ' 104 L0 104 Z" fill="url(#yrF)"/><path d="' + path + '" fill="none" stroke="#A9BDB7" stroke-opacity=".7" stroke-width="2.5"/>';
+    for (var mth = 0; mth < 12; mth++) {
+      var x = (new Date(yr, mth, 1).getTime() - new Date(yr, 0, 1).getTime()) / 86400000 / 365 * W;
+      s2 += '<text x="' + (x + 6).toFixed(0) + '" y="118" font-family="Manrope, Arial" font-size="16" fill="#A9BDB7" fill-opacity=".8">' + esc(t('monthsShort')[mth]) + '</text>';
+    }
+    s2 += '<text x="' + (W - 4) + '" y="18" text-anchor="end" font-family="Manrope, Arial" font-size="17" fill="#A9BDB7">' + esc(fmt(t('dlLongest'), Math.round(mx * 10) / 10)) + ' · ' + esc(fmt(t('dlShortest'), Math.round(mn * 10) / 10)) + '</text>';
+    s2 += '<line x1="' + tx.toFixed(1) + '" y1="10" x2="' + tx.toFixed(1) + '" y2="104" stroke="#EBB42C" stroke-opacity=".5" stroke-dasharray="3 5"/>';
+    s2 += '<circle cx="' + tx.toFixed(1) + '" cy="' + ty.toFixed(1) + '" r="8" fill="#EBB42C"/>';
+    svg.innerHTML = s2;
+  }
+
+  /* ---------- Globe: orthographic Earth from a 1024x512 land map, lookup tables, array copy per frame ---------- */
+  var globe = { on: false, cv: null, ctx: null, img: null, mask: null, px: null, base: null, shade: null, pal: null, off: 0, last: 0, step: 100, frames: 0, cost: 0, raf: 0, timer: 0 };
+  var GW = 1024, GH = 512, TILT = 22 * Math.PI / 180;
+  function globeLoadMask(cb) {
+    if (globe.mask) { cb(); return; }
+    var im = new Image();
+    im.onload = function () {
+      var c = document.createElement('canvas'); c.width = GW; c.height = GH;
+      var x = c.getContext('2d'); x.drawImage(im, 0, 0);
+      var d = x.getImageData(0, 0, GW, GH).data, m = new Uint8Array(GW * GH);
+      for (var i = 0; i < m.length; i++) { m[i] = d[i * 4] > 127 ? 1 : 0; }
+      globe.mask = m; cb();
+    };
+    im.onerror = function () { cb('mask'); };
+    im.src = 'img/land-1024.png?v=' + VERSION;
+  }
+  function globeTables(S) {
+    var R = S / 2 - 1, n = 0, px = [], base = [], shade = [];
+    var L = [-0.55, 0.42, 0.72], ll = Math.sqrt(L[0] * L[0] + L[1] * L[1] + L[2] * L[2]);
+    L = [L[0] / ll, L[1] / ll, L[2] / ll];
+    var sp = Math.sin(TILT), cp = Math.cos(TILT);
+    for (var yy = 0; yy < S; yy++) {
+      for (var xx = 0; xx < S; xx++) {
+        var u = (xx + 0.5 - S / 2) / R, v = (S / 2 - yy - 0.5) / R, r2 = u * u + v * v;
+        if (r2 > 1) { continue; }
+        var z = Math.sqrt(1 - r2);
+        /* rotate view point back by the tilt to get latitude/longitude */
+        var yw = v * cp + z * sp, zw = -v * sp + z * cp;
+        var lat = Math.asin(Math.max(-1, Math.min(1, yw))), lon = Math.atan2(u, zw);
+        var row = Math.min(GH - 1, Math.max(0, Math.floor((0.5 - lat / Math.PI) * GH)));
+        var col = Math.floor((lon / (2 * Math.PI) + 0.5) * GW) & (GW - 1);
+        var lit = u * L[0] + v * L[1] + z * L[2];
+        var lv = Math.max(0, lit) * 0.82 + 0.18 * z + 0.06;
+        px.push(yy * S + xx); base.push(row * GW + col); shade.push(Math.max(0, Math.min(63, Math.round(lv * 63))));
+        n++;
+      }
+    }
+    globe.px = new Uint32Array(px); globe.base = new Uint32Array(base); globe.shade = new Uint8Array(shade);
+    /* palette: [ocean 64 | land 64], RGBA little-endian (ABGR) */
+    function mix(a, b, f) { return Math.round(a + (b - a) * f); }
+    var pal = new Uint32Array(128), O0 = [1, 26, 24], O1 = [18, 84, 76], L0 = [40, 66, 60], L1 = [214, 224, 210];
+    for (var i = 0; i < 64; i++) {
+      var f = i / 63;
+      pal[i] = (255 << 24 | mix(O0[2], O1[2], f) << 16 | mix(O0[1], O1[1], f) << 8 | mix(O0[0], O1[0], f)) >>> 0;
+      pal[64 + i] = (255 << 24 | mix(L0[2], L1[2], f) << 16 | mix(L0[1], L1[1], f) << 8 | mix(L0[0], L1[0], f)) >>> 0;
+    }
+    globe.pal = pal;
+  }
+  function globeFrame(now) {
+    if (!globe.on) { return; }
+    var t0 = Date.now();
+    var S = globe.cv.width, data32 = globe.data32, m = globe.mask, pal = globe.pal, px = globe.px, base = globe.base, sh = globe.shade;
+    var off = Math.floor(globe.off) & (GW - 1);
+    for (var i = 0; i < px.length; i++) {
+      var b = base[i], row = b >> 10, col = ((b & 1023) - off) & 1023;
+      data32[px[i]] = pal[(m[(row << 10) | col] << 6) | sh[i]];
+    }
+    globe.ctx.putImageData(globe.img, 0, 0);
+    /* Rīga marker */
+    var cfg = theme.weather || {}, la = (+cfg.latitude || 56.95) * Math.PI / 180;
+    var lo = (+cfg.longitude || 24.11) * Math.PI / 180 + off / GW * 2 * Math.PI;
+    var x = Math.cos(la) * Math.sin(lo), yw = Math.sin(la), zw = Math.cos(la) * Math.cos(lo);
+    var v = yw * Math.cos(TILT) - zw * Math.sin(TILT), z = yw * Math.sin(TILT) + zw * Math.cos(TILT);
+    if (z > 0.05) {
+      var R = S / 2 - 1, cx = S / 2 + x * R, cy = S / 2 - v * R, c = globe.ctx;
+      c.beginPath(); c.arc(cx, cy, 13, 0, 2 * Math.PI); c.fillStyle = 'rgba(235,180,44,0.25)'; c.fill();
+      c.beginPath(); c.arc(cx, cy, 6, 0, 2 * Math.PI); c.fillStyle = '#EBB42C'; c.fill();
+    }
+    var cost = Date.now() - t0;
+    globe.frames++; globe.cost += cost;
+    if (globe.frames === 20) {
+      var avg = globe.cost / 20;
+      globe.step = avg > 120 ? 0 : avg > 45 ? 200 : avg > 20 ? 100 : 50;  /* slow TVs rotate less often, very slow: still image */
+    }
+    globe.off += 360 / 90 / 360 * GW * (globe.step || 100) / 1000;  /* one turn in 90 s */
+    globe.off = globe.off % GW;
+    if (globe.step) { globe.timer = setTimeout(globeFrame, globe.step); }
+  }
+  function globeStart(cv) {
+    globeStop();
+    if (!cv || !cv.getContext) { return; }
+    globe.cv = cv; globe.ctx = cv.getContext('2d');
+    globeLoadMask(function (err) {
+      if (err || !globe.ctx) { return; }
+      if (!globe.px || globe.size !== cv.width) { globeTables(cv.width); globe.size = cv.width; }
+      globe.img = globe.ctx.createImageData(cv.width, cv.width);
+      globe.data32 = new Uint32Array(globe.img.data.buffer);
+      globe.on = true; globe.frames = 0; globe.cost = 0; globe.step = 100;
+      /* start with Rīga facing the viewer */
+      var cfg = theme.weather || {};
+      globe.off = -((+cfg.longitude || 24.11) / 360 * GW) + GW;
+      globeFrame();
+    });
+  }
+  function globeStop() { globe.on = false; clearTimeout(globe.timer); }
+  /* ---------- Quick play radio: plays inside the hub, home stays on screen ---------- */
+  var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', urlIdx: 0, retry: 0 };
+  function radioLoad() {
+    getJSON('radio.json?v=' + VERSION, function (err, d) {
+      if (err || !d || !d.groups) { return; }
+      radio.groups = d.groups;
+      radio.list = [];
+      d.groups.forEach(function (g) { g.stations.forEach(function (s) { s.group = g.id; radio.list.push(s); }); });
+      var saved = store('radio');
+      radio.cur = radio.list.filter(function (s) { return saved && s.id === saved.id; })[0] || radio.list[0];
+      renderRadio();
+    });
+  }
+  function radioEl() {
+    if (!radio.audio) {
+      var a = new Audio();
+      a.preload = 'none';
+      a.addEventListener('playing', function () { radio.state = 'playing'; radio.retry = 0; renderRadio(); });
+      a.addEventListener('waiting', function () { if (radio.state !== 'off') { radio.state = 'loading'; renderRadio(); } });
+      a.addEventListener('error', function () { radioNextUrl(); });
+      a.addEventListener('stalled', function () { if (radio.state === 'playing') { radio.state = 'loading'; renderRadio(); } });
+      radio.audio = a;
+    }
+    return radio.audio;
+  }
+  function radioPlay(st) {
+    if (st) { radio.cur = st; store('radio', { id: st.id }); }
+    if (!radio.cur) { return; }
+    radio.urlIdx = 0; radio.state = 'loading'; renderRadio();
+    radioStart();
+  }
+  function radioStart() {
+    var a = radioEl(), url = radio.cur.urls[radio.urlIdx];
+    try { a.src = url; var p = a.play(); if (p && p.catch) { p.catch(function () { radioNextUrl(); }); } } catch (e) { radioNextUrl(); }
+  }
+  function radioNextUrl() {
+    if (radio.state === 'off') { return; }
+    if (radio.urlIdx + 1 < radio.cur.urls.length) { radio.urlIdx++; radioStart(); return; }
+    if (radio.retry < 1) { radio.retry++; radio.urlIdx = 0; setTimeout(radioStart, 1500); return; }
+    radio.state = 'off'; renderRadio(); toast(fmt(t('radioFail'), radio.cur.name));
+  }
+  function radioStop() {
+    radio.state = 'off';
+    if (radio.audio) { try { radio.audio.pause(); radio.audio.removeAttribute('src'); radio.audio.load(); } catch (e) { /* ignore */ } }
+    renderRadio();
+  }
+  function radioToggle() { if (radio.state === 'off') { radioPlay(); } else { radioStop(); } }
+  function renderRadio() {
+    var box = $('qp');
+    if (!box) { return; }
+    var on = radio.state !== 'off';
+    box.className = 'qp' + (on ? ' on' : '') + (radio.state === 'loading' ? ' loading' : '');
+    var nm = radio.cur ? radio.cur.name : '';
+    var tog = $('qp-toggle');
+    if (tog) {
+      tog.querySelector('.qp-ic').innerHTML = on ? ICONS.pause : ICONS.play;
+      tog.querySelector('.qp-nm').textContent = nm;
+      tog.querySelector('.qp-st').textContent = radio.state === 'loading' ? t('radioLoading') : on ? t('radioOn') : t('radioOff');
+    }
+    var ii = $('idle-radio');
+    if (ii) { ii.textContent = on ? '♪ ' + nm : ''; }
+  }
 
   /* ---------- Idle (I3) + night ---------- */
   function idleSeconds() { return theme && typeof theme.idleSeconds === 'number' ? theme.idleSeconds : 20; }
@@ -1091,7 +1489,7 @@
       renderWeek();
       loadCalendar(false);
     }
-    if (h !== lastHour) { lastHour = h; var age = (((d.getTime() / 86400000 - 10962.76) % 29.530588) + 29.530588) % 29.530588; $('moon-path').setAttribute('d', moonPath(age / 29.530588)); updateGreeting(h); }
+    if (h !== lastHour) { lastHour = h; var age = (((d.getTime() / 86400000 - 10962.76) % 29.530588) + 29.530588) % 29.530588; $('moon-path').setAttribute('d', moonPath(age / 29.530588)); updateGreeting(h); renderIdleHours(); }
     var wait = showSec ? 1000 - d.getMilliseconds() : (60 - s) * 1000 - d.getMilliseconds();
     tickTimer = setTimeout(tick, Math.max(200, wait));
   }
@@ -1127,6 +1525,7 @@
     $('idle-weather').textContent = text;
     $('idle-wx').innerHTML = icon;
     $('date2').textContent = hasSecond() ? formatDateL(prefs.lang2, new Date()) + (word2 ? ' · ' + word2 : '') : '';
+    renderIdleHours();
   }
   function weather(force) {
     var cfg = theme.weather || {};
@@ -1134,18 +1533,28 @@
     if (!cfg.enabled) { $('weather').textContent = ''; return; }
     var maxAge = (cfg.cacheMinutes || 30) * 60000;
     var cached = store('weather');
-    if (!force && cached && cached.daily && Date.now() - cached.at < maxAge) {
+    if (!force && cached && cached.hourly && Date.now() - cached.at < maxAge) {
       showWeather(cached, false);
       weatherTimer = setTimeout(weather, maxAge - (Date.now() - cached.at) + 1000);
       return;
     }
     var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + cfg.latitude + '&longitude=' + cfg.longitude +
-      '&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=3&timezone=auto';
+      '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure' +
+      '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,is_day,wind_speed_10m,wind_gusts_10m' +
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,precipitation_probability_max,uv_index_max' +
+      '&wind_speed_unit=ms&forecast_days=7&timezone=auto';
     getJSON(url, function (err, data) {
       if (!err && data && data.current) {
-        var dl = data.daily || {};
-        var w = { t: data.current.temperature_2m, code: data.current.weather_code, day: data.current.is_day, at: Date.now(),
-          daily: dl.time ? { time: dl.time, code: dl.weather_code, max: dl.temperature_2m_max, min: dl.temperature_2m_min, sunrise: dl.sunrise, sunset: dl.sunset } : null };
+        var dl = data.daily || {}, c = data.current, hr = data.hourly || {};
+        /* keep the hours from now on (about 2 days) to stay small in storage */
+        var start = 0, nowH = new Date(); nowH.setMinutes(0, 0, 0);
+        if (hr.time) { while (start < hr.time.length && localMs(hr.time[start]) < nowH.getTime()) { start++; } }
+        function cut(a) { return a ? a.slice(start, start + 48) : null; }
+        var w = { t: c.temperature_2m, code: c.weather_code, day: c.is_day, at: Date.now(), feels: c.apparent_temperature, hum: c.relative_humidity_2m,
+          wind: c.wind_speed_10m, dir: c.wind_direction_10m, gust: c.wind_gusts_10m, pres: c.surface_pressure,
+          hourly: hr.time ? { time: cut(hr.time), t: cut(hr.temperature_2m), pp: cut(hr.precipitation_probability), pr: cut(hr.precipitation), code: cut(hr.weather_code), day: cut(hr.is_day), wind: cut(hr.wind_speed_10m), gust: cut(hr.wind_gusts_10m) } : null,
+          daily: dl.time ? { time: dl.time, code: dl.weather_code, max: dl.temperature_2m_max, min: dl.temperature_2m_min, sunrise: dl.sunrise, sunset: dl.sunset,
+            psum: dl.precipitation_sum, ppmax: dl.precipitation_probability_max, uvmax: dl.uv_index_max } : null };
         store('weather', w);
         showWeather(w, false);
         renderSun();
@@ -1153,12 +1562,12 @@
         showWeather(cached, true);
       }
       weatherTimer = setTimeout(weather, maxAge);
-    }, 10000);
+    }, 12000);
   }
 
   /* ---------- Back from another app ---------- */
   function onVisibility() {
-    if (document.hidden) { clearTimeout(idleTimer); clearTimeout(tickTimer); return; }
+    if (document.hidden) { clearTimeout(idleTimer); clearTimeout(tickTimer); radioStop(); globeStop(); return; }
     if (mode === 'idle') { leaveIdle(); }
     lastDay = -1; lastHour = -1; lastMin = -1;
     tick();
@@ -1198,6 +1607,7 @@
     setInterval(function () { if (!document.hidden) { loadCalendar(false); pollSleep(); } }, 5 * 60000);
     setTimeout(function () { checkUpdate(false); }, 15000);
     setInterval(function () { if (!document.hidden) { checkUpdate(false); } }, 6 * 3600000);
+    radioLoad();
     getJSON('data/namedays-lv.json?v=' + VERSION, function (err, d) { if (!err && d) { nameDays = d; showNameDays(); } });
     armIdle();
     document.addEventListener('keydown', onKey);

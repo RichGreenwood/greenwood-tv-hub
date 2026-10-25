@@ -16,12 +16,13 @@ Additive only: Samsung's Home bar, apps and settings stay exactly as they are.
 | `app/data/` | Latvian name days (MIT, see CREDITS.md) |
 | `app/i18n.js` | Texts in English, Latviešu, Français |
 | `app/vendor/` | QR code generator (MIT, see CREDITS.md) |
+| `app/radio.json` | Quick play stations (official public streams, fallback URLs) |
 | `service.js` | Local helper on 127.0.0.1:8095: app list + icons, app launch (allowlist), remote keys (HDMI, Menu, Source, Home), calendar, sleep timer, updates, /log |
 | `.github/workflows/release.yml` | Creates tag + release from `package.json` version after an upload |
 | `docs/tizenbrew-review.md` | Code review of TizenBrew + installer |
 
 ## Screens
-Home (H3) with week strip · left MENU (Change look, Sleep timer, About, Samsung shortcuts) · right SCREENS (Calendar week, Weather, Daylight, All apps, Idle, Night view) · Connect calendars (QR, phone page) · idle (I3) with sun path and night mode · iPhone AirPlay card.
+Home (H3) with week strip · left MENU (Change look, Sleep timer, About, Samsung shortcuts) · right SCREENS (Calendar week, Weather, Daylight with globe + moon, Quick play, All apps, Idle, Night view) · Quick play radio on home · Connect calendars (QR, phone page) · idle (I3) with sun path and night mode · iPhone AirPlay card.
 
 ## Releasing an update
 1. Raise `version` in `package.json` (and `VERSION` in `app/main.js` + `service.js`), add a CHANGELOG entry.
@@ -33,5 +34,5 @@ Open `app/index.html` with a local web server (e.g. `python -m http.server` in `
 Arrows = remote, Enter = OK, Esc = Back.
 
 ## Rules
-No telemetry, no ads, no remote code. Outbound: Open-Meteo weather, calendar.google.com (your secret iCal links, stored only on the TV), jsDelivr serving these files.
+No telemetry, no ads, no remote code. Outbound: Open-Meteo weather, the radio streams in app/radio.json (only while playing), calendar.google.com (your secret iCal links, stored only on the TV), jsDelivr serving these files.
 Secrets never go in this repo: calendar links and the remote-control token live in /home/owner/share on the TV.

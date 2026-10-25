@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.5.2';
+var VERSION = '0.6.0';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
@@ -45,7 +45,9 @@ var CFG_FILE = '/home/owner/share/greenwoodHub.json';
 var STARTED = Date.now();
 var TOKEN_FILE = '/home/owner/share/greenwoodHubToken.txt';
 var NAME_B64 = new Buffer('Greenwood Hub').toString('base64');
-var ALLOWED = ['KEY_HDMI1', 'KEY_HDMI2', 'KEY_HDMI3', 'KEY_MENU', 'KEY_SOURCE', 'KEY_HOME'];
+var ALLOWED = ['KEY_HDMI1', 'KEY_HDMI2', 'KEY_HDMI3', 'KEY_MENU', 'KEY_SOURCE', 'KEY_HOME', 'KEY_VOLUP', 'KEY_VOLDOWN'];
+/* Not shown in All apps (Samsung extras, not useful to open): Samsung Promotion, Privacy Choices */
+var APP_HIDE_IDS = ['3201807016658', '3201909019271'];
 var APPS = [ /* native app IDs read from this TV (apps.csv, 24 Oct 2026). Add here when apps.json changes. */
   '3202301029760', /* HBO Max */
   '3201907018807', /* Netflix */
@@ -123,6 +125,7 @@ function sendKey(key, cb, host) {
       var wsKey = crypto.randomBytes(16).toString('base64');
       sock.write('GET ' + path + ' HTTP/1.1\r\n' +
         'Host: ' + host + ':8002\r\n' +
+        'Origin: https://' + host + ':8002\r\n' +
         'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
         'Sec-WebSocket-Key: ' + wsKey + '\r\nSec-WebSocket-Version: 13\r\n\r\n');
     });
@@ -159,21 +162,83 @@ function sendKey(key, cb, host) {
   sock.on('close', function () { finish(upgraded ? 'closed' : 'error'); });
 }
 
+/* Samsung's own list of installed apps (the same apps as the TV's Apps screen), over the remote channel. */
+function samsungApps(cb, host) {
+  host = host || keyHost || '127.0.0.1';
+  var token = readToken();
+  if (!token) { cb('no token'); return; }
+  var done = false, upgraded = false, buf = new Buffer(0), sock;
+  var timer = setTimeout(function () { finish('timeout'); }, 12000);
+  function finish(err, list) { if (done) { return; } done = true; clearTimeout(timer); try { sock.end(); } catch (e) { /* ignore */ } cb(err, list); }
+  try {
+    sock = tls.connect({ host: host, port: 8002, rejectUnauthorized: false }, function () {
+      sock.write('GET /api/v2/channels/samsung.remote.control?name=' + NAME_B64 + '&token=' + token + ' HTTP/1.1\r\n' +
+        'Host: ' + host + ':8002\r\nOrigin: https://' + host + ':8002\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n' +
+        'Sec-WebSocket-Key: ' + crypto.randomBytes(16).toString('base64') + '\r\nSec-WebSocket-Version: 13\r\n\r\n');
+    });
+  } catch (e) { finish('connect'); return; }
+  sock.on('data', function (chunk) {
+    buf = Buffer.concat([buf, chunk]);
+    if (!upgraded) {
+      var end = buf.toString('binary').indexOf('\r\n\r\n');
+      if (end < 0) { return; }
+      if (buf.slice(0, end).toString('utf8').indexOf(' 101') < 0) { finish('handshake'); return; }
+      upgraded = true; buf = buf.slice(end + 4);
+    }
+    var parsed = parseFrames(buf); buf = parsed.rest;
+    parsed.messages.forEach(function (text) {
+      var msg; try { msg = JSON.parse(text); } catch (e) { return; }
+      if (msg.event === 'ms.channel.connect') {
+        sock.write(frame(JSON.stringify({ method: 'ms.channel.emit', params: { event: 'ed.installedApp.get', to: 'host' } })));
+      } else if (msg.event === 'ed.installedApp.get') {
+        var d = msg.data && msg.data.data;
+        finish(d && d.length ? null : 'empty', d);
+      } else if (msg.event === 'ms.channel.unauthorized' || msg.event === 'ms.channel.timeOut') { finish('denied'); }
+    });
+  });
+  sock.on('error', function () { finish('error'); });
+}
+/* Fallback filter for tizen.application.getAppsInfo: store apps only (random 10-character package prefix),
+   plus the Internet browser; Samsung system services and TizenBrew stay hidden. */
+var SYS_PREFIX = /^(ZODRT12q2l|aQjWjLsPaO|30IKH0OX8U|xvvl3S1bvH|xvvl3S1bTI)\./;
+function usableTizenApp(a) {
+  if (a.id === 'org.tizen.browser') { return true; }
+  if (!/^[A-Za-z0-9]{10}\.[A-Za-z0-9_]+$/.test(a.id) || SYS_PREFIX.test(a.id)) { return false; }
+  return !/promotion|privacy|manual|launcher|extension|service|agent|widget/i.test(a.name || '');
+}
 function readApps(cb) {
-  if (Date.now() - appCache.at < 60000 && appCache.list.length) { cb(null, appCache.list); return; }
+  if (Date.now() - appCache.at < 10 * 60000 && appCache.list.length) { cb(null, appCache.list); return; }
+  samsungApps(function (err, data) {
+    if (!err && data) {
+      var list = [], icons = {};
+      data.forEach(function (a) {
+        if (!a || !a.appId || !a.name || APP_HIDE_IDS.indexOf(String(a.appId)) >= 0) { return; }
+        var id = String(a.appId);
+        if (a.icon) { icons[id] = String(a.icon); }
+        list.push({ id: id, name: String(a.name), icon: !!a.icon });
+      });
+      appCache = { at: Date.now(), list: list, icons: icons, source: 'samsung' };
+      cb(null, list);
+      return;
+    }
+    log('app list via Samsung channel: ' + err + ', using filtered app list');
+    readTizenApps(cb);
+  });
+}
+function readTizenApps(cb) {
   if (typeof tizen === 'undefined' || !tizen.application || !tizen.application.getAppsInfo) { cb('no tizen api'); return; }
   try {
     tizen.application.getAppsInfo(function (infos) {
       var list = [], icons = {}, seen = {};
       (infos || []).forEach(function (a) {
-        if (!a || !a.id || a.show === false || HIDE.test(a.id) || !a.name) { return; }
+        if (!a || !a.id || a.show === false || HIDE.test(a.id) || !a.name || !usableTizenApp(a)) { return; }
         if (seen[a.id]) { return; }
         seen[a.id] = true;
         var ip = a.iconPath ? String(a.iconPath).replace(/^file:\/\//, '') : '';
         if (ip) { icons[a.id] = ip; }
         list.push({ id: String(a.id), name: String(a.name), icon: !!ip });
       });
-      appCache = { at: Date.now(), list: list, icons: icons };
+      appCache = { at: Date.now(), list: list, icons: icons, source: 'tizen' };
       cb(null, list);
     }, function (e) { cb((e && e.name) ? e.name : 'getAppsInfo error'); });
   } catch (e) { cb((e && e.name) ? e.name : 'getAppsInfo error'); }
@@ -701,11 +766,31 @@ function setSleepUntil(ts) {
       res.on('end', function () {
         var on = false;
         try { on = JSON.parse(b).device.PowerState === 'on'; } catch (e) { on = false; }
-        if (on) { queue.push({ key: 'KEY_POWER', res: { end: function () {} } }); next(); }
         log('sleep timer fired, TV ' + (on ? 'on -> KEY_POWER' : 'not on -> nothing'));
+        if (on) { sleepPowerOff(0); }
       });
     }).on('error', function () { log('sleep timer: status page not reachable, nothing sent'); });
   }, ts - Date.now());
+}
+
+/* Switch off, then confirm on the status page; if the TV still reports "on", try the other route (max 3 tries). */
+function powerState(cb) {
+  http.get('http://127.0.0.1:8001/api/v2/', function (res) {
+    var b = '';
+    res.on('data', function (c) { b += c; });
+    res.on('end', function () { var st = ''; try { st = JSON.parse(b).device.PowerState || ''; } catch (e) { st = ''; } cb(st); });
+  }).on('error', function () { cb(''); });
+}
+function sleepPowerOff(attempt) {
+  var host = attempt === 1 ? (lanIp() || '127.0.0.1') : '127.0.0.1';
+  queue.push({ key: 'KEY_POWER', host: attempt ? host : '', res: { end: function (j) { log('sleep KEY_POWER try ' + (attempt + 1) + ': ' + j); } } });
+  next();
+  setTimeout(function () {
+    powerState(function (st) {
+      log('sleep check after try ' + (attempt + 1) + ': PowerState ' + (st || 'unknown'));
+      if (st === 'on' && attempt < 2) { sleepPowerOff(attempt + 1); }
+    });
+  }, 12000);
 }
 
 /* ---------- Status ---------- */
@@ -726,7 +811,8 @@ function status(cb0) {
     lastKey: LOG.length ? LOG[LOG.length - 1] : '', token: !!readToken(),
     calendars: (cfg.calendars || []).map(function (c) { return c.label; }),
     calendarAt: calCache.at, calendarErrors: calCache.errors, sleepEndsAt: sleep.endsAt, storage: null,
-    module: currentModule(), previous: cfg.prevTag || ''
+    module: currentModule(), previous: cfg.prevTag || '', keyHost: keyHost, appsFrom: appCache.source || '',
+    keyLog: LOG.filter(function (l) { return / KEY_| sleep/.test(l); }).slice(-3)
   };
   try {
     tizen.systeminfo.getPropertyValue('STORAGE', function (s) {
@@ -910,7 +996,8 @@ function next() {
   if (busy || !queue.length) { return; }
   busy = true;
   var job = queue.shift();
-  sendKeyRetry(job.key, function (err, last) {
+  var send = job.host ? function (k, cb) { sendKey(k, cb, job.host); } : sendKeyRetry;
+  send(job.key, function (err, last) {
     busy = false;
     job.res.end(JSON.stringify(err ? { ok: false, error: err, detail: last } : { ok: true }));
     next();

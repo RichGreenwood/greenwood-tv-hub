@@ -129,6 +129,10 @@
       "id": "daylight"
     },
     {
+      "id": "radio",
+      "label": "Quick play"
+    },
+    {
       "id": "apps"
     },
     {

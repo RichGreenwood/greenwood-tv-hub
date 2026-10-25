@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-10-25
+- Weather screen redesigned: now, feels like, high/low and a plain-language outlook (rain timing, wind, tomorrow); wind, rain, humidity, UV, pressure, sunrise tiles; 24-hour temperature curve with rain chance; 7-day forecast with temperature range bars.
+- Daylight screen: Greenwood-style globe turning in the middle of the sun path (drawn on the TV from Natural Earth land data, public domain; slows down or stops by itself on a slow TV), Rīga marked; first/last light, golden hours, solar noon, day length and change vs yesterday; Moon card (phase, % lit, age, next full and new moon); daylight through the year.
+- Quick play radio on home: Latvian radio (LR1, LR2, LR3 Klasika, SWH, Star FM), lounge & jazz, lo-fi. Plays while the hub stays on screen; stops when another app or input opens. Stations in app/radio.json.
+- Idle screen: next 5 hours of weather; shows the playing station. Night view brighter.
+- All apps: only the apps from Samsung's own app list (same as the TV's Apps screen), Samsung Promotion and Privacy Choices hidden; filtered fallback if that list is not available.
+- Sleep timer: confirms the TV really switched off and retries over the TV's network address (max 3 tries). About shows the last remote-key result and has "Test remote keys" (volume up + down).
+
 ## 0.5.2 — 2026-10-24
 - First start of a new version tidies TizenBrew's list by itself: older Greenwood Hub entries are removed and autolaunch moves to the new version (other modules untouched, backup kept). No autolaunch setting needed on the TV.
 - Remote keys: if the local remote channel refuses, the helper retries over the TV's own network address.

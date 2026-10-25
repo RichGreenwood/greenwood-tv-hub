@@ -1,6 +1,6 @@
 {
   "name": "greenwood-tv-hub",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Greenwood home screen for Ričards's Samsung UE55RU7172 (TizenBrew app module).",
   "packageType": "app",
   "appName": "Greenwood Hub",
