@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.7.2';
+  var VERSION = '0.7.3';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -1491,7 +1491,7 @@
   }
   function globeStop() { globe.on = false; clearTimeout(globe.timer); }
   /* ---------- Quick play radio: plays inside the hub, home stays on screen ---------- */
-  var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', routes: [], idx: 0, att: 0, retry: 0, timer: 0, wait: 0, why: [], last: null, played: false, drops: 0, good: 0, pos: 0, posAt: 0 };
+  var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', routes: [], idx: 0, att: 0, retry: 0, timer: 0, wait: 0, why: [], last: null, played: false, drops: 0, good: 0, pos: 0, posAt: 0, ticks: 0, drops2: [] };
   function radioLoad() {
     getJSON('radio.json?v=' + VERSION, function (err, d) {
       if (err || !d || !d.groups) { return; }
@@ -1546,13 +1546,20 @@
         clearTimeout(radio.timer);
         var r = radio.routes[radio.idx], again = radio.played;
         radio.state = 'playing'; radio.retry = 0; radio.drops = 0; radio.played = true; radio.good = radio.idx;
-        radio.pos = a.currentTime; radio.posAt = Date.now();
+        radio.pos = a.currentTime; radio.posAt = Date.now(); radio.ticks = 0;
         renderRadio();
-        radioNote((again ? 'playing again' : 'playing') + (r && r.via === 'helper' ? ' via helper' : ''));
+        var n = (radio.drops2 || []).filter(function (x) { return Date.now() - x < 3600000; }).length;
+        radioNote((again ? 'playing again' : 'playing') + (r && r.via === 'helper' ? ' via helper' : '') + (n ? ' \u00B7 ' + n + ' reconnect' + (n > 1 ? 's' : '') + ' in the last hour (last: ' + (radio.why[radio.why.length - 1] || '?') + ')' : ''));
       });
-      a.addEventListener('timeupdate', function () { if (a.currentTime !== radio.pos) { radio.pos = a.currentTime; radio.posAt = Date.now(); } });
+      a.addEventListener('timeupdate', function () {
+        if (a.currentTime === radio.pos) { return; }
+        radio.pos = a.currentTime; radio.posAt = Date.now(); radio.ticks++;
+        /* sound is moving again after a hiccup: carry on, nothing to reconnect */
+        if (radio.state === 'loading' && radio.played) { clearTimeout(radio.timer); radio.state = 'playing'; renderRadio(); }
+      });
+      /* 'stalled' only means no new data for ~3 s and often fires while sound keeps playing from the buffer, so it
+         never interrupts anything. 'waiting' (the buffer really ran out) gets 12 s to recover by itself. */
       a.addEventListener('waiting', function () { if (radio.state === 'playing') { radio.state = 'loading'; renderRadio(); radioArm(); } });
-      a.addEventListener('stalled', function () { if (radio.state === 'playing') { radio.state = 'loading'; renderRadio(); radioArm(); } });
       a.addEventListener('ended', function () { radioFail(radio.att, 'stream ended'); });
       a.addEventListener('error', function () { if (a.getAttribute('src')) { radioFail(radio.att, 'error ' + (a.error ? a.error.code : '?')); } });
       radio.audio = a;
@@ -1562,18 +1569,22 @@
   function radioArm() {
     var att = radio.att;
     clearTimeout(radio.timer);
-    radio.timer = setTimeout(function () { radioFail(att, 'timeout'); }, RADIO_TIMEOUT);
+    var from = Date.now();
+    radio.timer = setTimeout(function () {
+      if (radio.played && radio.posAt > from) { if (radio.state === 'loading') { radio.state = 'playing'; renderRadio(); } return; }
+      radioFail(att, 'timeout');
+    }, RADIO_TIMEOUT);
   }
   /* watchdog: playing but the clock has not moved for 20 s = silently stuck */
   setInterval(function () {
-    if (radio.state === 'playing' && radio.audio && Date.now() - (radio.posAt || Date.now()) > 20000) { radioFail(radio.att, 'no sound for 20 s'); }
+    if (radio.state === 'playing' && radio.audio && radio.ticks > 3 && !radio.audio.paused && Date.now() - (radio.posAt || Date.now()) > 20000) { radioFail(radio.att, 'no sound for 20 s'); }
   }, 5000);
   function radioPlay(st) {
     if (st) { radio.cur = st; store('radio', { id: st.id }); }
     if (!radio.cur) { return; }
     clearTimeout(radio.wait);
     radio.routes = radioRoutes(radio.cur); radio.idx = 0; radio.retry = 0; radio.why = [];
-    radio.played = false; radio.drops = 0; radio.good = 0;
+    radio.played = false; radio.drops = 0; radio.good = 0; radio.drops2 = []; radio.ticks = 0;
     radio.state = 'loading'; renderRadio();
     radioStart();
   }
@@ -1605,6 +1616,7 @@
       radio.idx = radio.good || 0;
       radio.state = 'retry'; renderRadio();
       try { radio.audio.pause(); } catch (e) { /* ignore */ }
+      radio.drops2 = (radio.drops2 || []).filter(function (x) { return Date.now() - x < 3600000; }); radio.drops2.push(Date.now());
       radioNote('reconnecting: ' + why);
       clearTimeout(radio.wait);
       radio.wait = setTimeout(function () { if (radio.state === 'retry') { radioStart(); } }, first ? 300 : delay);

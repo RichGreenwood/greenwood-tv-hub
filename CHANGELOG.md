@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3 — 2026-10-25
+- Quick play no longer cuts itself off. A short gap in a station's data ("stalled") no longer counts as a failure: sound keeps playing from the buffer, and if the buffer runs dry the hub waits up to 12 s for the sound to move again before it reconnects. The 20-second no-sound check only runs once the clock has been seen moving.
+- About › Quick play now also shows how many times the station reconnected in the last hour and why, to tell a weak connection from a station problem.
+
 ## 0.7.2 — 2026-10-25
 - Quick play keeps playing. Once a station has played, a drop no longer turns it off: the stream ending, an error, a stall longer than 12 s or 20 s with no sound all reconnect by themselves (Reconnecting…), starting from the address that worked, waiting 2, 4, 8, 15, 30 then every 60 s.
 - Stations with newer certificates play. The hub helper now carries the current public root certificates (Let's Encrypt, Sectigo, Google, Amazon, DigiCert, GlobalSign …) and uses them when the TV's 2019 list cannot check a station. Certificates are always checked. On the TV, https stations go through the helper first, and an https address on the standard port is also tried over plain http as a last resort.
