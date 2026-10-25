@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.6.0';
+  var VERSION = '0.7.0';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -55,7 +55,9 @@
     play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>',
     pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>',
     radio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8l9-5"/><circle cx="15.5" cy="14" r="2.5"/><path d="M6 12h4M6 15h4"/></svg>',
-    about: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>'
+    about: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>',
+    updates: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4h-4"/><path d="M12 8v5l3 2"/></svg>',
+    tvinfo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M7 12l3-3 2 2 4-4"/></svg>'
   };
   var WX = {
     sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>',
@@ -204,7 +206,7 @@
 
   /* ---------- Home tiles ---------- */
   function iconFor(id) { return id.indexOf('hdmi') === 0 ? ICONS.hdmi : (ICONS[id] || ''); }
-  var SPECIAL = { iphone: 1, apps: 1, idle: 1, night: 1, calendar: 1, weather: 1, daylight: 1, look: 1, sleep: 1, about: 1, radio: 1, 'qp-toggle': 1, 'qp-pick': 1 };
+  var SPECIAL = { iphone: 1, apps: 1, idle: 1, night: 1, calendar: 1, weather: 1, daylight: 1, look: 1, sleep: 1, about: 1, updates: 1, tvinfo: 1, radio: 1, 'qp-toggle': 1, 'qp-pick': 1 };
   function isLinked(id) { return !!SPECIAL[id] || !!apps[id]; }
   function labelL(lang, item, kind) {
     var d = dict(lang);
@@ -270,6 +272,7 @@
       if (lastGroup && item.group !== lastGroup) { var sep = document.createElement('div'); sep.className = 'mi-sep'; mh.appendChild(sep); }
       lastGroup = item.group || 'hub';
       var tile = makeTile(item, 'menu');
+      if (item.id === 'updates') { tile.el.insertAdjacentHTML('beforeend', '<span class="mi-badge" id="mi-upd"></span>'); }
       mh.appendChild(tile.el);
       return tile;
     });
@@ -328,7 +331,25 @@
     if (rmenu[rpos]) { rmenu[rpos].el.classList.remove('focus'); }
   }
 
-  function openCard() { mode = 'card'; $('card').hidden = false; }
+  function openCard() { mode = 'card'; $('card').hidden = false; paintWifi(); }
+  /* Wi-Fi QR on the iPhone card: the helper builds the standard WIFI: text from the network name the TV reports
+     and the password saved once from the phone setup page (kept only on the TV). */
+  function drawWifi(r) {
+    var qr = $('cw-qr');
+    $('cw-ssid').textContent = r && r.ssid ? r.ssid : '';
+    if (r && r.qr && window.qrcode) {
+      try { var q = window.qrcode(0, 'M'); q.addData(r.qr); q.make(); qr.innerHTML = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }); } catch (e) { qr.innerHTML = ''; }
+      qr.className = 'cw-qr';
+      $('cw-note').textContent = t('wifiScan');
+    } else {
+      qr.innerHTML = ICONS.iphone; qr.className = 'cw-qr empty';
+      $('cw-note').textContent = r && r.ssid ? t('wifiSetup') : t('wifiNone');
+    }
+  }
+  function paintWifi() {
+    if (!ON_TV) { drawWifi({ ssid: 'Home Wi-Fi', qr: 'WIFI:T:WPA;S:Home Wi-Fi;P:example-only;;' }); return; }
+    callService('/wifi', function (r) { drawWifi(r.ok ? r : null); }, 4000);
+  }
   function closeCard() { mode = 'home'; $('card').hidden = true; setFocus(pos.r, pos.c); }
 
   /* ---------- Launch counts ---------- */
@@ -399,6 +420,8 @@
   function cleanName(n) { return String(n).replace(/\s+[-–—:]\s+.*$/, '').trim() || String(n); }
   function sortApps(list) {
     var counts = store('launches') || {};
+    var show = apps._show && apps._show.length ? apps._show : null;
+    if (show) { list = list.filter(function (a) { return show.indexOf(a.id) >= 0; }); }
     list = list.map(function (a) { return { id: a.id, name: cleanName(a.name), icon: !!a.icon }; });
     return list.slice().sort(function (a, b) {
       var ca = counts['app:' + a.id] || 0, cb = counts['app:' + b.id] || 0;
@@ -459,6 +482,7 @@
     allList = sortApps(cached && cached.length ? cached : staticApps());
     renderAll();
     setAllFocus(0);
+    pollStats();
     loadAllApps(function (list) {
       store('allApps', list);
       if (mode !== 'all') { return; }
@@ -470,7 +494,30 @@
       setAllFocus(idx);
     });
   }
-  function closeAll() { mode = 'home'; $('all').hidden = true; setFocus(pos.r, pos.c); }
+  function closeAll() { mode = 'home'; $('all').hidden = true; clearTimeout(statsTimer); setFocus(pos.r, pos.c); }
+  /* TV stats bar on All apps: storage, memory, processor (service.js /stats), every 3 s while the screen is open */
+  var statsTimer = null;
+  function gb(bytes) { return (bytes / 1073741824).toFixed(1).replace('.', t('decimal') || '.') + ' GB'; }
+  function meter(id, label, value, frac) {
+    var pct = Math.max(0, Math.min(1, frac || 0));
+    var el = $(id);
+    el.className = 'st-c' + (pct >= 0.85 ? ' hot' : '');
+    el.innerHTML = '<div class="st-top"><span class="st-k">' + esc(label) + '</span><span class="st-v">' + esc(value) + '</span></div>' +
+      '<div class="st-bar"><i style="transform:scaleX(' + pct.toFixed(3) + ')"></i></div>';
+  }
+  function paintStats(s) {
+    if (!s) { $('all-stats').className = 'all-stats off'; return; }
+    $('all-stats').className = 'all-stats';
+    if (s.storage) { meter('st-storage', t('stStorage'), fmt(t('stFree'), gb(s.storage.free)).replace('{t}', gb(s.storage.total)), 1 - s.storage.free / s.storage.total); }
+    if (s.mem) { meter('st-mem', t('stMemory'), fmt(t('stUsed'), gb(s.mem.total - s.mem.avail)).replace('{t}', gb(s.mem.total)), 1 - s.mem.avail / s.mem.total); }
+    if (s.cpu !== undefined && s.cpu !== null) { meter('st-cpu', t('stCpu'), Math.round(s.cpu * 100) + '%', s.cpu); }
+  }
+  function pollStats() {
+    clearTimeout(statsTimer);
+    if (mode !== 'all') { return; }
+    if (!ON_TV) { paintStats({ storage: { free: 2.4 * 1073741824, total: 4.6 * 1073741824 }, mem: { total: 2.5 * 1073741824, avail: 1.3 * 1073741824 }, cpu: 0.18 }); return; }
+    callService('/stats', function (r) { paintStats(r.ok ? r : null); statsTimer = setTimeout(pollStats, 3000); }, 4000);
+  }
   function allKey(k) {
     var n = allTiles.length;
     if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) { closeAll(); return; }
@@ -632,7 +679,7 @@
           tile(WI.hum, 'wxHumidity', (w.hum !== undefined ? Math.round(w.hum) : '–') + '<small>%</small>', '') +
           tile(WI.uv, 'wxUV', d.uvmax ? Math.round(d.uvmax[0]) : '–', d.uvmax ? uvLabel(d.uvmax[0]) : '') +
           tile(WI.gauge, 'wxPressure', (w.pres !== undefined ? Math.round(w.pres) : '–') + '<small> hPa</small>', '') +
-          tile(WI.sun, 'wxSun', d.sunrise && d.sunrise[0] ? d.sunrise[0].slice(11, 16) + '<small> → </small>' + d.sunset[0].slice(11, 16) : '–', '') +
+          tile(WI.sun, 'wxSun', d.sunrise && d.sunrise[0] ? d.sunrise[0].slice(11, 16) + '<small> – </small>' + d.sunset[0].slice(11, 16) : '–', d.sunrise && d.sunrise[0] ? dur(localMs(d.sunset[0]) - localMs(d.sunrise[0])) : '') +
           '</div>';
         /* week */
         var lo = Math.min.apply(null, d.min), hi = Math.max.apply(null, d.max), span = Math.max(1, hi - lo);
@@ -646,7 +693,7 @@
             '<div class="w7-bar"><i style="left:' + l.toFixed(0) + '%;width:' + Math.max(6, r - l).toFixed(0) + '%"></i></div></div>';
         }
         week += '</div>';
-        return '<div class="wx2">' + hero + det + '<div class="wx-sec">' + esc(t('wxNext24')) + '</div><svg class="wx-chart" id="wx-chart" viewBox="0 0 1728 236" width="1728" height="236"></svg>' + week + '</div>';
+        return '<div class="wx2">' + hero + det + '<div class="wx-sec">' + esc(t('wxNext24')) + '</div><svg class="wx-chart" id="wx-chart" viewBox="0 0 1728 240" width="1728" height="240"></svg>' + week + '</div>';
       },
       init: function () { drawWxChart($('wx-chart'), wxHours(store('weather'), 24)); }
     },
@@ -754,10 +801,10 @@
     about: {
       title: function (lang) { return tl(lang, 'aboutTitle'); },
       html: function () {
-        var ub = '';
-        if (updInfo && updInfo.newer) { ub += '<div class="btn btn-gold fx" data-act="update" data-v="' + esc(updInfo.latest) + '">' + esc(fmt(t('updInstall'), updInfo.latest)) + '</div>'; }
-        else { ub += '<div class="btn fx" data-act="check">' + esc(t('updCheck')) + '</div>'; }
-        if (updInfo && updInfo.previous && updInfo.previous !== 'v' + updInfo.current) { ub += '<div class="btn fx" data-act="update" data-v="' + esc(updInfo.previous) + '">' + esc(fmt(t('updPrev'), updInfo.previous)) + '</div>'; }
+        var ub = updInfo && updInfo.newer
+          ? '<div class="btn btn-gold fx" data-act="go" data-v="updates">' + esc(fmt(t('updAvailable'), updInfo.latest)) + ' \u203A</div>'
+          : '<div class="btn fx" data-act="go" data-v="updates">' + esc(t('m_updates')) + ' \u203A</div>';
+        ub += '<div class="btn fx" data-act="go" data-v="tvinfo">' + esc(t('m_tvinfo')) + ' \u203A</div>';
         return '<div class="ab"><div class="ab-rows" id="ab-rows"></div><div class="ab-btns">' + ub +
           '<div class="btn fx" data-act="setup">' + esc(t('calConnect')) + '</div>' +
           '<div class="btn fx" data-act="keytest">' + esc(t('keyTest')) + '</div>' +
@@ -782,6 +829,8 @@
             html += row(t('a_lastKey'), kl ? kl.slice(0, 64) : '\u2014', !kl ? 'warn' : /^\S+ ok /.test(kl) ? 'ok' : 'bad');
             html += row(t('a_apps'), s.appsFrom === 'samsung' ? t('appsSamsung') : s.appsFrom === 'tizen' ? t('appsTizen') : '\u2014', s.appsFrom === 'samsung' ? 'ok' : 'warn');
           }
+          var rl = radio.last || store('radioLast');
+          html += row(t('a_radio'), rl ? rl.name + ' \u00B7 ' + rl.result + ' \u00B7 ' + agoText(rl.at) : '\u2014', !rl ? 'warn' : /^playing/.test(rl.result) ? 'ok' : 'bad');
           html += row(t('a_updates'), !updInfo ? '\u2014' : updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate') + ' \u00B7 v' + VERSION, updInfo && updInfo.newer ? 'warn' : 'ok');
           $('ab-rows').innerHTML = html;
         }
@@ -789,7 +838,8 @@
         if (ON_TV) { callService('/status', function (r) { if (scr.id === 'about') { paint(r.ok ? r : null); } }, 4000); }
       },
       act: function (a, v) {
-        if (a === 'setup') { renderScreen('setup'); }
+        if (a === 'go') { renderScreen(v, 0); }
+        else if (a === 'setup') { renderScreen('setup'); }
         else if (a === 'check') { checkUpdate(true, function () { if (scr.id === 'about') { renderScreen('about', 0); } toast(updInfo && updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate')); }); }
         else if (a === 'update') { runUpdate(v); }
         else if (a === 'keytest') {
@@ -801,6 +851,71 @@
         }
         else if (a === 'refresh') { loadCalendar(true, function () { toast(t('calRefresh') + ' ✓'); if (scr.id === 'about') { renderScreen('about', scr.f); } }); }
         else if (a === 'forget') { callService('/setup/forget', function () { calData = { configured: 0, events: [], at: 0 }; store('cal', calData); renderAgenda(); renderWeek(); renderScreen('about', 0); }); }
+      }
+    },
+    updates: {
+      title: function (lang) { return tl(lang, 'm_updates'); },
+      html: function () {
+        var u = updInfo || { current: VERSION, newer: false, latest: '', previous: '' };
+        var newer = !!u.newer;
+        var st = newer ? fmt(t('updAvailable'), u.latest) : t('updUpToDate');
+        var btns = newer ? '<div class="btn btn-gold fx" data-act="install" data-v="' + esc(u.latest) + '">' + esc(fmt(t('updInstall'), u.latest)) + '</div>' : '';
+        btns += '<div class="btn fx" data-act="check">' + esc(t('updCheck')) + '</div>';
+        if (u.previous && u.previous !== 'v' + VERSION) { btns += '<div class="btn fx" data-act="install" data-v="' + esc(u.previous) + '">' + esc(fmt(t('updPrev'), u.previous)) + '</div>'; }
+        return '<div class="ud"><div class="ud-l"><div class="ud-k">' + esc(t('udInstalled')) + '</div><div class="ud-v">' + esc(VERSION) + '</div>' +
+          '<div class="ud-st' + (newer ? ' new' : '') + '"><i></i>' + esc(st) + '</div><div class="ud-btns">' + btns + '</div></div>' +
+          '<div class="ud-r"><div class="ud-k">' + esc(t('udHow')) + '</div><ol class="ud-steps"><li>' + esc(t('udStep1')) + '</li><li>' + esc(t('udStep2')) + '</li><li>' + esc(t('udStep3')) + '</li></ol></div></div>';
+      },
+      act: function (a, v) {
+        if (a === 'install') { runUpdate(v); }
+        else if (a === 'check') { checkUpdate(true, function () { if (scr.id === 'updates') { renderScreen('updates', 0); } toast(updInfo && updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate')); }); }
+      }
+    },
+    tvinfo: {
+      title: function (lang) { return tl(lang, 'm_tvinfo'); },
+      html: function () {
+        function ring(id, k) {
+          return '<div class="ti-g" id="ti-' + id + '"><svg viewBox="0 0 200 200" width="200" height="200"><circle cx="100" cy="100" r="84" fill="none" stroke="rgba(169,189,183,.18)" stroke-width="14"/>' +
+            '<circle class="ti-arc" cx="100" cy="100" r="84" fill="none" stroke="#EBB42C" stroke-width="14" stroke-linecap="round" stroke-dasharray="0 528" transform="rotate(-90 100 100)"/></svg>' +
+            '<div class="ti-pc">\u2014</div><div class="ti-k">' + esc(t(k)) + '</div><div class="ti-d">\u00A0</div></div>';
+        }
+        return '<div class="ti"><div class="ti-rows ab-rows" id="ti-rows"></div><div class="ti-gs">' + ring('storage', 'stStorage') + ring('mem', 'stMemory') + ring('cpu', 'stCpu') + '</div></div>';
+      },
+      init: function () {
+        function row(k, v, st) { return '<div class="ab-row"><i class="st st-' + st + '"></i><span class="ab-k">' + esc(k) + '</span><span class="ab-v">' + esc(v) + '</span></div>'; }
+        function paintInfo(i, s) {
+          var h = row(t('tiModel'), i.model || '\u2014', i.model ? 'ok' : 'warn') + row(t('tiSystem'), i.platform ? 'Tizen ' + i.platform : '\u2014', i.platform ? 'ok' : 'warn') +
+            row(t('tiScreen'), i.width ? i.width + ' \u00D7 ' + i.height : '\u2014', i.width ? 'ok' : 'warn') +
+            row(t('a_network'), (i.ssid ? i.ssid + ' \u00B7 ' : '') + (s && s.ip ? s.ip : '\u2014'), s && s.ip ? 'ok' : 'warn') +
+            row(t('tiHub'), VERSION + (s ? ' \u00B7 ' + t('running') + ' ' + s.uptimeMin + ' ' + t('min') : ''), s ? 'ok' : 'bad') +
+            row(t('a_keys'), s && s.token ? t('allowed') : t('notYet'), s && s.token ? 'ok' : 'warn');
+          $('ti-rows').innerHTML = h;
+        }
+        function gauge(id, frac, pct, detail) {
+          var g = $('ti-' + id); if (!g) { return; }
+          var f = Math.max(0, Math.min(1, frac || 0)), arc = g.querySelector('.ti-arc');
+          arc.setAttribute('stroke-dasharray', (f * 527.8).toFixed(1) + ' 528');
+          arc.setAttribute('stroke', f >= 0.85 ? '#E8A15A' : '#EBB42C');
+          g.querySelector('.ti-pc').textContent = pct;
+          g.querySelector('.ti-d').textContent = detail;
+        }
+        function gb(b) { return (b / 1073741824).toFixed(1) + ' GB'; }
+        function paintStats(s) {
+          if (!s) { return; }
+          if (s.storage) { var su = 1 - s.storage.free / s.storage.total; gauge('storage', su, Math.round(su * 100) + '%', fmt(t('stFree'), gb(s.storage.free)).replace('{t}', gb(s.storage.total))); }
+          if (s.mem) { var mu = 1 - s.mem.avail / s.mem.total; gauge('mem', mu, Math.round(mu * 100) + '%', fmt(t('stUsed'), gb(s.mem.total - s.mem.avail)).replace('{t}', gb(s.mem.total))); }
+          if (s.cpu !== null && s.cpu !== undefined) { gauge('cpu', s.cpu, Math.round(s.cpu * 100) + '%', t('tiCpuNote')); }
+        }
+        if (!ON_TV) {
+          paintInfo({ model: 'UE55RU7172', platform: '5.0', width: 1920, height: 1080, ssid: 'Home Wi-Fi' }, { ip: '192.168.1.103', uptimeMin: 42, token: true });
+          paintStats({ storage: { free: 2.4 * 1073741824, total: 4.6 * 1073741824 }, mem: { total: 2.5 * 1073741824, avail: 1.5 * 1073741824 }, cpu: 0.18 });
+          return;
+        }
+        callService('/info', function (i) { callService('/status', function (s) { if (scr.id === 'tvinfo') { paintInfo(i.ok ? i : {}, s.ok ? s : null); } }, 4000); }, 4000);
+        (function poll() {
+          if (scr.id !== 'tvinfo') { return; }
+          callService('/stats', function (r) { if (scr.id === 'tvinfo') { paintStats(r.ok ? r : null); setTimeout(poll, 3000); } }, 4000);
+        })();
       }
     },
     update: {
@@ -849,7 +964,12 @@
 
   /* ---------- Updates (About -> Install): the helper points TizenBrew to the new tag, then the page moves over ---------- */
   function checkUpdate(force, cb) {
-    if (!ON_TV) { updInfo = { newer: false, latest: 'v' + VERSION, previous: '' }; if (cb) { cb(); } return; }
+    if (!ON_TV) {
+      /* PC preview only: ?upd=0.7.0 shows the 'update available' state */
+      var q = /[?&]upd=([0-9.]+)/.exec(location.search);
+      updInfo = { newer: !!q, latest: q ? 'v' + q[1] : 'v' + VERSION, previous: 'v0.5.2', current: VERSION };
+      updateUpdBadge(); if (cb) { cb(); } return;
+    }
     callService('/update/check' + (force ? '?force=1' : ''), function (r) {
       if (r && r.current) { updInfo = r; }
       updateUpdBadge();
@@ -860,6 +980,8 @@
     var b = $('upd-badge');
     if (updInfo && updInfo.newer) { b.hidden = false; b.textContent = fmt(t('updBadge'), updInfo.latest); }
     else { b.hidden = true; }
+    var mb = $('mi-upd');
+    if (mb) { mb.textContent = updInfo && updInfo.newer ? updInfo.latest : ''; }
   }
   function runUpdate(tag) {
     renderScreen('update');
@@ -898,7 +1020,7 @@
   }
   function renderAgenda() {
     var box = $('agenda');
-    if (!calData.configured) { box.hidden = true; $('idle-next').textContent = ''; return; }
+    if (!calData.configured) { box.hidden = true; $('idle-next').textContent = ''; $('idle-ag').innerHTML = ''; return; }
     box.hidden = false;
     var h2 = t2('today');
     $('agenda-h').innerHTML = esc(t('today')) + (h2 && h2 !== t('today') ? '<span class="sec-inline">' + esc(h2) + '</span>' : '');
@@ -909,22 +1031,32 @@
     var now = Date.now();
     var next = calData.events.filter(function (e) { return !e.allDay && e.start > now; })[0];
     $('idle-next').textContent = next ? t('next') + ': ' + (next.start >= dayStart(1) ? t('days')[new Date(next.start).getDay()] + ' ' : '') + hhmm(next.start) + ' · ' + evTitle(next) : '';
+    var ag = upcomingToday().slice(0, 2), agH = t('today');
+    if (!ag.length && next) { ag = [next]; agH = t('next').toUpperCase(); }
+    $('idle-ag').innerHTML = ag.length ? '<div class="ia-k">' + esc(agH) + '</div>' + ag.map(function (e) {
+      var day = e.start >= dayStart(1) ? t('daysShort')[new Date(e.start).getDay()] + ' ' : '';
+      return '<div class="ia-ev">' + calDot(e) + '<span class="ia-t">' + esc(e.allDay ? t('allDay') : day + hhmm(e.start)) + '</span><span class="ia-n">' + esc(evTitle(e)) + '</span></div>';
+    }).join('') : '';
   }
   /* Week strip: Monday to Sunday of the current week; today lights up; a dot marks days with meetings. */
   function renderWeek() {
     var now = new Date();
-    var monday = dayStart(-((now.getDay() + 6) % 7));
+    /* Sunday: the strip starts today and runs to Saturday; Monday to Saturday: the week starts on Monday */
+    var first = now.getDay() === 0 ? dayStart(0) : dayStart(-((now.getDay() + 6) % 7));
     var html = '';
     for (var i = 0; i < 7; i++) {
-      var ms = dayStart(i, monday);
+      var ms = dayStart(i, first);
       var d = new Date(ms);
       var isToday = ms === dayStart(0);
       var busy = calData.configured && eventsOnDay(ms).length > 0;
       var past = ms < dayStart(0);
-      html += '<div class="wk' + (isToday ? ' today' : '') + (past ? ' past' : '') + '"><div class="wk-d">' + esc(t('daysShort')[d.getDay()]) + '</div>' +
+      var weekend = d.getDay() === 0 || d.getDay() === 6;
+      html += '<div class="wk' + (isToday ? ' today' : '') + (past ? ' past' : '') + (weekend ? ' we' : '') + '"><div class="wk-d">' + esc(t('daysShort')[d.getDay()]) + '</div>' +
         '<div class="wk-n">' + d.getDate() + '</div><div class="wk-dot' + (busy ? ' on' : '') + '"></div></div>';
     }
     $('week').innerHTML = html;
+    /* Ričards's choice: weekend days soft blue on Sundays (strip starts Sunday), coral red Monday to Saturday */
+    $('week').className = 'week' + (now.getDay() === 0 ? ' sun-start' : '');
   }
 
   /* ---------- Name days ---------- */
@@ -934,6 +1066,7 @@
     var d = new Date();
     var list = nameDays[pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())] || [];
     el.textContent = list.length ? t('nameDays') + ': ' + list.join(', ') : '';
+    if ($('idle-nd')) { $('idle-nd').textContent = el.textContent; }
   }
 
   /* ---------- Sleep badge ---------- */
@@ -1028,9 +1161,14 @@
     }
     s += txt(x0 - gap, ly, fs, 700, '#F4F2EC', hhmm(today.rise), 'end') + txt(x0 - gap, ly + fsm + 6, fsm, 500, '#A9BDB7', t('sunrise'), 'end');
     s += txt(x1 + gap, ly, fs, 700, '#F4F2EC', hhmm(today.set), 'start') + txt(x1 + gap, ly + fsm + 6, fsm, 500, '#A9BDB7', t('sunset'), 'start');
-    if (!G) {
-    s += txt(cx, base - (big ? 84 : 52), fsm, 600, '#A9BDB7', t('daylight').toUpperCase(), 'middle', ' letter-spacing="3"');
-    s += '<text x="' + cx + '" y="' + (base - (big ? 26 : 16)) + '" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-size="' + (big ? 56 : 34) + '" font-weight="600" fill="#F4F2EC" style="font-variant-numeric:lining-nums">' + esc(dur(today.set - today.rise)) + '</text>';
+    if (!G && big) {
+    s += txt(cx, base - 84, fsm, 600, '#A9BDB7', t('daylight').toUpperCase(), 'middle', ' letter-spacing="3"');
+    s += '<text x="' + cx + '" y="' + (base - 26) + '" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-size="56" font-weight="600" fill="#F4F2EC" style="font-variant-numeric:lining-nums">' + esc(dur(today.set - today.rise)) + '</text>';
+    } else if (!G) {
+    /* idle: time left to sunset (or sunrise) inside the arc; the day's total length under the horizon */
+    s += txt(cx, base - 60, fsm, 700, isDay ? '#EBB42C' : '#A9BDB7', (isDay ? t('sunsetIn') : t('sunriseIn')).toUpperCase(), 'middle', ' letter-spacing="3"');
+    s += '<text x="' + cx + '" y="' + (base - 18) + '" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-size="40" font-weight="600" fill="#F4F2EC" style="font-variant-numeric:lining-nums">' + esc(dur(isDay ? today.set - now : nextRise - now)) + '</text>';
+    s += txt(cx, base + 28, 18, 500, '#C9D6D2', t('daylight') + ' ' + dur(today.set - today.rise));
     }
     if (isDay) {
       s += '<circle cx="' + px + '" cy="' + py + '" r="' + (big ? 48 : 30) + '" fill="url(#sunG' + id + ')" opacity=".6"/>';
@@ -1040,7 +1178,7 @@
       s += '<circle cx="' + (p[0] + (big ? 6 : 4)).toFixed(1) + '" cy="' + (p[1] - (big ? 4 : 3)).toFixed(1) + '" r="' + (big ? 11 : 7.5) + '" fill="#011B18"/>';
     }
     svg.innerHTML = s;
-    cap.textContent = isDay ? t('sunsetIn') + ' ' + dur(today.set - now) : t('sunriseIn') + ' ' + dur(nextRise - now) + ' · ' + hhmm(nextRise);
+    cap.textContent = (!big && !G) ? '' : isDay ? t('sunsetIn') + ' ' + dur(today.set - now) : t('sunriseIn') + ' ' + dur(nextRise - now) + ' · ' + hhmm(nextRise);
     if (cap2) {
       cap2.textContent = !hasSecond() ? '' : isDay ? tl(prefs.lang2, 'sunsetIn') + ' ' + durL(prefs.lang2, today.set - now)
         : tl(prefs.lang2, 'sunriseIn') + ' ' + durL(prefs.lang2, nextRise - now);
@@ -1067,7 +1205,7 @@
     for (var i = 0; i < h.time.length && out.length < n; i++) {
       var ms = localMs(h.time[i]);
       if (ms < now.getTime()) { continue; }
-      out.push({ ms: ms, t: h.t[i], pp: h.pp ? h.pp[i] : 0, pr: h.pr ? h.pr[i] : 0, code: h.code[i], day: h.day ? h.day[i] : 1, wind: h.wind ? h.wind[i] : 0, gust: h.gust ? h.gust[i] : 0 });
+      out.push({ ms: ms, t: h.t[i], pp: h.pp ? h.pp[i] : 0, pr: h.pr ? h.pr[i] : 0, code: h.code[i], day: h.day ? h.day[i] : 1, wind: h.wind ? h.wind[i] : 0, gust: h.gust ? h.gust[i] : 0, dir: h.dir ? h.dir[i] : null });
     }
     return out;
   }
@@ -1096,11 +1234,11 @@
   /* 24 h: temperature line, rain bars, icons every 3 h */
   function drawWxChart(svg, hrs) {
     if (!svg || !hrs.length) { return; }
-    var W = 1728, H = 236, top = 44, bot = 168, n = hrs.length, step = W / n;
+    var W = 1728, H = 240, top = 40, bot = 128, n = hrs.length, step = W / n;
     var tmin = Infinity, tmax = -Infinity;
     hrs.forEach(function (h) { tmin = Math.min(tmin, h.t); tmax = Math.max(tmax, h.t); });
     if (tmax - tmin < 4) { var m = (tmax + tmin) / 2; tmin = m - 2; tmax = m + 2; }
-    function y(v) { return bot - (v - tmin) / (tmax - tmin) * (bot - top - 26); }
+    function y(v) { return bot - 18 - (v - tmin) / (tmax - tmin) * (bot - top - 44); }
     var s = '<defs><linearGradient id="wxT" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EBB42C" stop-opacity=".22"/><stop offset="100%" stop-color="#EBB42C" stop-opacity="0"/></linearGradient></defs>';
     /* rain bars */
     hrs.forEach(function (h, i) {
@@ -1116,8 +1254,17 @@
       if (i % 3 === 0) {
         s += '<circle cx="' + x.toFixed(1) + '" cy="' + pts[i][1].toFixed(1) + '" r="5" fill="#012B28" stroke="#EBB42C" stroke-width="2.5"/>';
         s += '<text x="' + x.toFixed(1) + '" y="' + (pts[i][1] - 14).toFixed(1) + '" text-anchor="middle" font-family="Manrope, Arial" font-size="22" font-weight="700" fill="#F4F2EC">' + Math.round(h.t) + '°</text>';
-        s += '<text x="' + x.toFixed(1) + '" y="' + (bot + 30) + '" text-anchor="middle" font-family="Manrope, Arial" font-size="19" fill="#A9BDB7">' + (i === 0 ? esc(t('now')) : pad2(new Date(h.ms).getHours())) + '</text>';
-        if (h.pp >= 30) { s += '<text x="' + x.toFixed(1) + '" y="' + (bot + 52) + '" text-anchor="middle" font-family="Manrope, Arial" font-size="17" fill="#7FB3C9">' + h.pp + '%</text>'; }
+        s += '<text x="' + x.toFixed(1) + '" y="' + (bot + 32) + '" text-anchor="middle" font-family="Manrope, Arial" font-size="20" font-weight="700" fill="#A9BDB7">' + (i === 0 ? esc(t('now')) : pad2(new Date(h.ms).getHours()) + ':00') + '</text>';
+        /* wind: arrow points where the wind blows to; amber when gusts are strong */
+        var strong = (h.gust || 0) >= 12, wc = strong ? '#E8A15A' : '#DCE5E1';
+        var ws = Math.round(h.wind || 0) + ' m/s';
+        var hasDir = h.dir !== null && h.dir !== undefined;
+        var gw = ws.length * 10 + (hasDir ? 22 : 0), gx = Math.max(4, Math.min(W - gw - 4, x - gw / 2));
+        if (hasDir) {
+          s += '<g transform="translate(' + (gx + 8).toFixed(1) + ' ' + (bot + 61) + ') rotate(' + Math.round(h.dir + 180) + ')"><path d="M0 -8 L5.5 6 L0 3 L-5.5 6 Z" fill="' + wc + '"/></g>';
+        }
+        s += '<text x="' + (gx + (hasDir ? 22 : 0)).toFixed(1) + '" y="' + (bot + 67) + '" text-anchor="start" font-family="Manrope, Arial" font-size="19" font-weight="500" fill="' + wc + '">' + ws + '</text>';
+        if (h.pp >= 30) { s += '<text x="' + x.toFixed(1) + '" y="' + (bot + 98) + '" text-anchor="middle" font-family="Manrope, Arial" font-size="18" font-weight="700" fill="#7FB3C9">' + h.pp + '%</text>'; }
       }
     });
     svg.innerHTML = s;
@@ -1126,11 +1273,23 @@
   function renderIdleHours() {
     var box = $('idle-hours');
     if (!box) { return; }
-    var hrs = wxHours(store('weather'), 6).slice(1, 6);
+    var w = store('weather');
+    /* every 2 hours: now +2, +4, +6, +8, +10 */
+    var all = wxHours(w, 11), hrs = [];
+    for (var i = 2; i < all.length && hrs.length < 5; i += 2) { hrs.push(all[i]); }
+    $('idle-hk').textContent = hrs.length ? t('idleHours') : '';
     box.innerHTML = hrs.map(function (h) {
+      var pp = Math.max(0, Math.min(100, Math.round(h.pp || 0)));
       return '<div class="ih"><div class="ih-h">' + pad2(new Date(h.ms).getHours()) + ':00</div><div class="ih-ic">' + wxIcon(h.code, h.day) + '</div>' +
-        '<div class="ih-t">' + Math.round(h.t) + '°</div><div class="ih-p">' + (h.pp >= 20 ? h.pp + '%' : '&nbsp;') + '</div></div>';
+        '<div class="ih-t">' + Math.round(h.t) + '°</div>' +
+        '<div class="ih-bar"><i style="width:' + pp + '%"></i></div><div class="ih-p' + (pp < 20 ? ' low' : '') + '">' + pp + '%</div></div>';
     }).join('');
+    var now = $('idle-now');
+    if (!w) { now.innerHTML = ''; return; }
+    var line1 = wmo(w.code) + (w.feels !== undefined ? ' · ' + fmt(t('wxFeels'), Math.round(w.feels)) : '');
+    var line2 = wxSummary(w)[0] || '';
+    now.innerHTML = '<span class="in-ic">' + wxIcon(w.code, w.day) + '</span><span class="in-t">' + Math.round(w.t) + '°</span>' +
+      '<span class="in-tx"><span class="in-1">' + esc(line1) + '</span><span class="in-2">' + line2 + '</span></span>';
   }
   /* ---------- Daylight details: twilight, golden hour, moon, year curve ---------- */
   function sunAt(dayOffset, alt) {
@@ -1202,8 +1361,8 @@
   }
 
   /* ---------- Globe: orthographic Earth from a 1024x512 land map, lookup tables, array copy per frame ---------- */
-  var globe = { on: false, cv: null, ctx: null, img: null, mask: null, px: null, base: null, shade: null, pal: null, off: 0, last: 0, step: 100, frames: 0, cost: 0, raf: 0, timer: 0 };
-  var GW = 1024, GH = 512, TILT = 22 * Math.PI / 180;
+  var globe = { on: false, cv: null, ctx: null, img: null, mask: null, px: null, base: null, limb: null, pal: null, light: null, lightAt: 0, off: 0, lastOff: -1, step: 100, frames: 0, cost: 0, timer: 0 };
+  var GW = 1024, GH = 512, TILT = 22 * Math.PI / 180, GLOBE_TURN_S = 240;  /* one slow turn every 4 minutes */
   function globeLoadMask(cb) {
     if (globe.mask) { cb(); return; }
     var im = new Image();
@@ -1217,66 +1376,101 @@
     im.onerror = function () { cb('mask'); };
     im.src = 'img/land-1024.png?v=' + VERSION;
   }
+  /* Per-pixel tables: which texel each screen pixel shows, and how far it is from the limb (depth shading). */
   function globeTables(S) {
-    var R = S / 2 - 1, n = 0, px = [], base = [], shade = [];
-    var L = [-0.55, 0.42, 0.72], ll = Math.sqrt(L[0] * L[0] + L[1] * L[1] + L[2] * L[2]);
-    L = [L[0] / ll, L[1] / ll, L[2] / ll];
+    var R = S / 2 - 1, px = [], base = [], limb = [];
     var sp = Math.sin(TILT), cp = Math.cos(TILT);
     for (var yy = 0; yy < S; yy++) {
       for (var xx = 0; xx < S; xx++) {
         var u = (xx + 0.5 - S / 2) / R, v = (S / 2 - yy - 0.5) / R, r2 = u * u + v * v;
         if (r2 > 1) { continue; }
         var z = Math.sqrt(1 - r2);
-        /* rotate view point back by the tilt to get latitude/longitude */
         var yw = v * cp + z * sp, zw = -v * sp + z * cp;
         var lat = Math.asin(Math.max(-1, Math.min(1, yw))), lon = Math.atan2(u, zw);
         var row = Math.min(GH - 1, Math.max(0, Math.floor((0.5 - lat / Math.PI) * GH)));
         var col = Math.floor((lon / (2 * Math.PI) + 0.5) * GW) & (GW - 1);
-        var lit = u * L[0] + v * L[1] + z * L[2];
-        var lv = Math.max(0, lit) * 0.82 + 0.18 * z + 0.06;
-        px.push(yy * S + xx); base.push(row * GW + col); shade.push(Math.max(0, Math.min(63, Math.round(lv * 63))));
-        n++;
+        px.push(yy * S + xx); base.push(row * GW + col); limb.push(Math.min(31, Math.round(Math.pow(z, 0.55) * 31)));
       }
     }
-    globe.px = new Uint32Array(px); globe.base = new Uint32Array(base); globe.shade = new Uint8Array(shade);
-    /* palette: [ocean 64 | land 64], RGBA little-endian (ABGR) */
-    function mix(a, b, f) { return Math.round(a + (b - a) * f); }
-    var pal = new Uint32Array(128), O0 = [1, 26, 24], O1 = [18, 84, 76], L0 = [40, 66, 60], L1 = [214, 224, 210];
-    for (var i = 0; i < 64; i++) {
-      var f = i / 63;
-      pal[i] = (255 << 24 | mix(O0[2], O1[2], f) << 16 | mix(O0[1], O1[1], f) << 8 | mix(O0[0], O1[0], f)) >>> 0;
-      pal[64 + i] = (255 << 24 | mix(L0[2], L1[2], f) << 16 | mix(L0[1], L1[1], f) << 8 | mix(L0[0], L1[0], f)) >>> 0;
+    globe.px = new Uint32Array(px); globe.base = new Uint32Array(base); globe.limb = new Uint8Array(limb);
+    /* palette [land 2][daylight 32][depth 32]: night -> twilight (a touch of Greenwood gold) -> day */
+    function mix(a, b, f) { return a + (b - a) * f; }
+    var pal = new Uint32Array(2048);
+    var OD = [22, 96, 86], ON = [2, 21, 20], LD = [218, 226, 212], LN = [30, 52, 48], G = [235, 180, 44];
+    for (var land = 0; land < 2; land++) {
+      for (var dq = 0; dq < 32; dq++) {
+        var d = dq / 31, tw = 4 * d * (1 - d) * (land ? 0.22 : 0.30);
+        for (var lq = 0; lq < 32; lq++) {
+          var lz = 0.5 + 0.5 * (lq / 31), c = [];
+          for (var k = 0; k < 3; k++) {
+            var day = land ? LD[k] : OD[k], night = land ? LN[k] : ON[k];
+            var v0 = mix(night, day, d) * mix(0.62, 1, lz);
+            c.push(Math.max(0, Math.min(255, Math.round(mix(v0, G[k], tw)))));
+          }
+          pal[(land << 10) | (dq << 5) | lq] = (255 << 24 | c[2] << 16 | c[1] << 8 | c[0]) >>> 0;
+        }
+      }
     }
     globe.pal = pal;
   }
-  function globeFrame(now) {
+  /* Where the sun is overhead right now (declination + longitude), from the date alone. */
+  function subsolar(ms) {
+    var d = ms / 86400000 - 10957.5, rad = Math.PI / 180;
+    var g = (357.529 + 0.98560028 * d) * rad, q = 280.459 + 0.98564736 * d;
+    var L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * rad, e = (23.439 - 0.00000036 * d) * rad;
+    var ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e) * Math.sin(L));
+    var gmst = (280.46061837 + 360.98564736629 * d) % 360;
+    var lon = (ra / rad - gmst) % 360; if (lon > 180) { lon -= 360; } if (lon < -180) { lon += 360; }
+    return { dec: dec, lon: lon * rad };
+  }
+  /* Daylight map in Earth coordinates (32 levels with a soft twilight band), refreshed every minute. */
+  function globeLight(ms) {
+    var s = subsolar(ms), sd = Math.sin(s.dec), cd = Math.cos(s.dec);
+    var light = globe.light || new Uint8Array(GW * GH), cosd = new Float32Array(GW);
+    for (var c = 0; c < GW; c++) { cosd[c] = Math.cos(((c + 0.5) / GW * 2 - 1) * Math.PI - s.lon); }
+    for (var r = 0; r < GH; r++) {
+      var lat = (0.5 - (r + 0.5) / GH) * Math.PI, a = Math.sin(lat) * sd, b = Math.cos(lat) * cd, o = r * GW;
+      for (var c2 = 0; c2 < GW; c2++) {
+        var cz = a + b * cosd[c2], f = (cz + 0.11) / 0.22;  /* sun from about 6 degrees below to 6 above the horizon */
+        f = f <= 0 ? 0 : f >= 1 ? 1 : f * f * (3 - 2 * f);
+        /* the day side is brightest under the sun and softens toward the evening and morning edge */
+        if (cz > 0) { f *= 0.74 + 0.26 * Math.sqrt(cz); }
+        light[o + c2] = Math.round(f * 31);
+      }
+    }
+    globe.light = light; globe.lightAt = ms; globe.lastOff = -1;
+  }
+  function globeFrame() {
     if (!globe.on) { return; }
     var t0 = Date.now();
-    var S = globe.cv.width, data32 = globe.data32, m = globe.mask, pal = globe.pal, px = globe.px, base = globe.base, sh = globe.shade;
+    if (t0 - globe.lightAt > 60000) { globeLight(t0); }
     var off = Math.floor(globe.off) & (GW - 1);
-    for (var i = 0; i < px.length; i++) {
-      var b = base[i], row = b >> 10, col = ((b & 1023) - off) & 1023;
-      data32[px[i]] = pal[(m[(row << 10) | col] << 6) | sh[i]];
+    if (off !== globe.lastOff) {
+      var S = globe.cv.width, data32 = globe.data32, m = globe.mask, lt = globe.light, pal = globe.pal, px = globe.px, base = globe.base, lb = globe.limb;
+      for (var i = 0; i < px.length; i++) {
+        var b = base[i], t = (b & ~1023) | (((b & 1023) - off) & 1023);
+        data32[px[i]] = pal[(m[t] << 10) | (lt[t] << 5) | lb[i]];
+      }
+      globe.ctx.putImageData(globe.img, 0, 0);
+      /* Rīga marker */
+      var cfg = theme.weather || {}, la = (+cfg.latitude || 56.95) * Math.PI / 180;
+      var lo = (+cfg.longitude || 24.11) * Math.PI / 180 + off / GW * 2 * Math.PI;
+      var x = Math.cos(la) * Math.sin(lo), yw = Math.sin(la), zw = Math.cos(la) * Math.cos(lo);
+      var v = yw * Math.cos(TILT) - zw * Math.sin(TILT), z = yw * Math.sin(TILT) + zw * Math.cos(TILT);
+      if (z > 0.05) {
+        var R = S / 2 - 1, cx = S / 2 + x * R, cy = S / 2 - v * R, c = globe.ctx;
+        c.beginPath(); c.arc(cx, cy, 12, 0, 2 * Math.PI); c.fillStyle = 'rgba(235,180,44,0.22)'; c.fill();
+        c.beginPath(); c.arc(cx, cy, 5, 0, 2 * Math.PI); c.fillStyle = '#EBB42C'; c.fill();
+        c.lineWidth = 1.5; c.strokeStyle = 'rgba(1,43,40,0.9)'; c.stroke();
+      }
+      globe.lastOff = off;
+      globe.frames++; globe.cost += Date.now() - t0;
+      if (globe.frames === 12) {
+        var avg = globe.cost / 12;
+        globe.step = avg > 150 ? 0 : avg > 60 ? 400 : 200;  /* slow TVs redraw less often, very slow ones keep a still image */
+      }
     }
-    globe.ctx.putImageData(globe.img, 0, 0);
-    /* Rīga marker */
-    var cfg = theme.weather || {}, la = (+cfg.latitude || 56.95) * Math.PI / 180;
-    var lo = (+cfg.longitude || 24.11) * Math.PI / 180 + off / GW * 2 * Math.PI;
-    var x = Math.cos(la) * Math.sin(lo), yw = Math.sin(la), zw = Math.cos(la) * Math.cos(lo);
-    var v = yw * Math.cos(TILT) - zw * Math.sin(TILT), z = yw * Math.sin(TILT) + zw * Math.cos(TILT);
-    if (z > 0.05) {
-      var R = S / 2 - 1, cx = S / 2 + x * R, cy = S / 2 - v * R, c = globe.ctx;
-      c.beginPath(); c.arc(cx, cy, 13, 0, 2 * Math.PI); c.fillStyle = 'rgba(235,180,44,0.25)'; c.fill();
-      c.beginPath(); c.arc(cx, cy, 6, 0, 2 * Math.PI); c.fillStyle = '#EBB42C'; c.fill();
-    }
-    var cost = Date.now() - t0;
-    globe.frames++; globe.cost += cost;
-    if (globe.frames === 20) {
-      var avg = globe.cost / 20;
-      globe.step = avg > 120 ? 0 : avg > 45 ? 200 : avg > 20 ? 100 : 50;  /* slow TVs rotate less often, very slow: still image */
-    }
-    globe.off += 360 / 90 / 360 * GW * (globe.step || 100) / 1000;  /* one turn in 90 s */
-    globe.off = globe.off % GW;
+    globe.off = (globe.off + GW / GLOBE_TURN_S * (globe.step || 200) / 1000) % GW;
     if (globe.step) { globe.timer = setTimeout(globeFrame, globe.step); }
   }
   function globeStart(cv) {
@@ -1288,7 +1482,7 @@
       if (!globe.px || globe.size !== cv.width) { globeTables(cv.width); globe.size = cv.width; }
       globe.img = globe.ctx.createImageData(cv.width, cv.width);
       globe.data32 = new Uint32Array(globe.img.data.buffer);
-      globe.on = true; globe.frames = 0; globe.cost = 0; globe.step = 100;
+      globe.on = true; globe.frames = 0; globe.cost = 0; globe.step = 200; globe.lightAt = 0; globe.lastOff = -1;
       /* start with Rīga facing the viewer */
       var cfg = theme.weather || {};
       globe.off = -((+cfg.longitude || 24.11) / 360 * GW) + GW;
@@ -1297,7 +1491,7 @@
   }
   function globeStop() { globe.on = false; clearTimeout(globe.timer); }
   /* ---------- Quick play radio: plays inside the hub, home stays on screen ---------- */
-  var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', urlIdx: 0, retry: 0 };
+  var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', routes: [], idx: 0, att: 0, retry: 0, timer: 0, why: [], last: null };
   function radioLoad() {
     getJSON('radio.json?v=' + VERSION, function (err, d) {
       if (err || !d || !d.groups) { return; }
@@ -1309,37 +1503,82 @@
       renderRadio();
     });
   }
+  /* Quick play player. Each station tries its addresses in order, each first directly and then through the hub
+     helper (which copes with old Shoutcast servers, redirects and newer certificates). An attempt that has not
+     started playing within 12 s counts as failed, exactly once. The last result shows on About. */
+  var RADIO_TIMEOUT = 12000;
+  function radioRoutes(st) {
+    var out = [];
+    st.urls.forEach(function (u) {
+      var hls = /\.m3u8(\?|$)/i.test(u);
+      if (!(ON_TV && hls)) { out.push({ src: u, via: 'direct', url: u }); }
+      if (ON_TV && !hls) { out.push({ src: SERVICE + '/radio?u=' + encodeURIComponent(u), via: 'helper', url: u }); }
+    });
+    return out;
+  }
+  function radioNote(result) {
+    radio.last = { name: radio.cur ? radio.cur.name : '', result: result, at: Date.now() };
+    store('radioLast', radio.last);
+  }
   function radioEl() {
     if (!radio.audio) {
       var a = new Audio();
       a.preload = 'none';
-      a.addEventListener('playing', function () { radio.state = 'playing'; radio.retry = 0; renderRadio(); });
-      a.addEventListener('waiting', function () { if (radio.state !== 'off') { radio.state = 'loading'; renderRadio(); } });
-      a.addEventListener('error', function () { radioNextUrl(); });
-      a.addEventListener('stalled', function () { if (radio.state === 'playing') { radio.state = 'loading'; renderRadio(); } });
+      a.addEventListener('playing', function () {
+        if (radio.state === 'off') { return; }
+        clearTimeout(radio.timer); radio.state = 'playing'; radio.retry = 0; renderRadio();
+        var r = radio.routes[radio.idx];
+        radioNote(r ? (r.via === 'helper' ? 'playing via helper' : 'playing') : 'playing');
+      });
+      a.addEventListener('waiting', function () { if (radio.state === 'playing') { radio.state = 'loading'; renderRadio(); radioArm(); } });
+      a.addEventListener('stalled', function () { if (radio.state === 'playing') { radio.state = 'loading'; renderRadio(); radioArm(); } });
+      a.addEventListener('error', function () { radioFail(radio.att, 'error ' + (a.error ? a.error.code : '?')); });
       radio.audio = a;
     }
     return radio.audio;
   }
+  function radioArm() {
+    var att = radio.att;
+    clearTimeout(radio.timer);
+    radio.timer = setTimeout(function () { radioFail(att, 'timeout'); }, RADIO_TIMEOUT);
+  }
   function radioPlay(st) {
     if (st) { radio.cur = st; store('radio', { id: st.id }); }
     if (!radio.cur) { return; }
-    radio.urlIdx = 0; radio.state = 'loading'; renderRadio();
+    radio.routes = radioRoutes(radio.cur); radio.idx = 0; radio.retry = 0; radio.why = [];
+    radio.state = 'loading'; renderRadio();
     radioStart();
   }
   function radioStart() {
-    var a = radioEl(), url = radio.cur.urls[radio.urlIdx];
-    try { a.src = url; var p = a.play(); if (p && p.catch) { p.catch(function () { radioNextUrl(); }); } } catch (e) { radioNextUrl(); }
+    var a = radioEl(), r = radio.routes[radio.idx];
+    if (!r) { radioFail(radio.att, 'no address'); return; }
+    radio.att = (radio.att || 0) + 1;
+    var att = radio.att;
+    radioArm();
+    try {
+      a.src = r.src;
+      var p = a.play();
+      if (p && p.catch) { p.catch(function (e) { radioFail(att, 'play ' + (e && e.name ? e.name : 'refused')); }); }
+    } catch (e) { radioFail(att, 'play error'); }
   }
-  function radioNextUrl() {
-    if (radio.state === 'off') { return; }
-    if (radio.urlIdx + 1 < radio.cur.urls.length) { radio.urlIdx++; radioStart(); return; }
-    if (radio.retry < 1) { radio.retry++; radio.urlIdx = 0; setTimeout(radioStart, 1500); return; }
-    radio.state = 'off'; renderRadio(); toast(fmt(t('radioFail'), radio.cur.name));
+  function radioFail(att, why) {
+    if (radio.state === 'off' || att !== radio.att) { return; }   /* already handled, or an old attempt */
+    radio.att++;
+    clearTimeout(radio.timer);
+    var r = radio.routes[radio.idx];
+    radio.why.push((r ? r.via : '') + ' ' + why);
+    if (radio.idx + 1 < radio.routes.length) { radio.idx++; radioStart(); return; }
+    if (radio.retry < 1) { radio.retry++; radio.idx = 0; setTimeout(function () { if (radio.state !== 'off') { radioStart(); } }, 1500); return; }
+    radioNote('failed: ' + radio.why.slice(-2).join(', '));
+    radioStopAudio(); radio.state = 'off'; renderRadio(); toast(fmt(t('radioFail'), radio.cur.name));
+  }
+  function radioStopAudio() {
+    clearTimeout(radio.timer);
+    if (radio.audio) { try { radio.audio.pause(); radio.audio.removeAttribute('src'); radio.audio.load(); } catch (e) { /* ignore */ } }
   }
   function radioStop() {
-    radio.state = 'off';
-    if (radio.audio) { try { radio.audio.pause(); radio.audio.removeAttribute('src'); radio.audio.load(); } catch (e) { /* ignore */ } }
+    radio.state = 'off'; radio.att = (radio.att || 0) + 1;
+    radioStopAudio();
     renderRadio();
   }
   function radioToggle() { if (radio.state === 'off') { radioPlay(); } else { radioStop(); } }
@@ -1540,7 +1779,7 @@
     }
     var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + cfg.latitude + '&longitude=' + cfg.longitude +
       '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure' +
-      '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,is_day,wind_speed_10m,wind_gusts_10m' +
+      '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,is_day,wind_speed_10m,wind_gusts_10m,wind_direction_10m' +
       '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,precipitation_probability_max,uv_index_max' +
       '&wind_speed_unit=ms&forecast_days=7&timezone=auto';
     getJSON(url, function (err, data) {
@@ -1552,7 +1791,7 @@
         function cut(a) { return a ? a.slice(start, start + 48) : null; }
         var w = { t: c.temperature_2m, code: c.weather_code, day: c.is_day, at: Date.now(), feels: c.apparent_temperature, hum: c.relative_humidity_2m,
           wind: c.wind_speed_10m, dir: c.wind_direction_10m, gust: c.wind_gusts_10m, pres: c.surface_pressure,
-          hourly: hr.time ? { time: cut(hr.time), t: cut(hr.temperature_2m), pp: cut(hr.precipitation_probability), pr: cut(hr.precipitation), code: cut(hr.weather_code), day: cut(hr.is_day), wind: cut(hr.wind_speed_10m), gust: cut(hr.wind_gusts_10m) } : null,
+          hourly: hr.time ? { time: cut(hr.time), t: cut(hr.temperature_2m), pp: cut(hr.precipitation_probability), pr: cut(hr.precipitation), code: cut(hr.weather_code), day: cut(hr.is_day), wind: cut(hr.wind_speed_10m), gust: cut(hr.wind_gusts_10m), dir: cut(hr.wind_direction_10m) } : null,
           daily: dl.time ? { time: dl.time, code: dl.weather_code, max: dl.temperature_2m_max, min: dl.temperature_2m_min, sunrise: dl.sunrise, sunset: dl.sunset,
             psum: dl.precipitation_sum, ppmax: dl.precipitation_probability_max, uvmax: dl.uv_index_max } : null };
         store('weather', w);

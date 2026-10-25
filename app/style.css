@@ -334,6 +334,10 @@ html, body { background: #011815; }
 .wk-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 4px; background: transparent; }
 .wk-dot.on { background: var(--sage); }
 .wk.past { opacity: .5; }
+/* Weekend days: label and date in the weekend colour (today's card keeps its ivory look) */
+.wk.we .wk-d, .wk.we .wk-n { color: var(--weekend, #E07A6A); }
+.wk.we.today .wk-d { color: var(--weekend-on-ivory, #B5503F); }
+.wk.we.today .wk-n { color: var(--forest); }
 .wk.today { background: var(--ivory); border-color: var(--ivory); color: var(--forest); }
 .wk.today .wk-d { color: var(--pine); }
 .wk.today .wk-dot.on { background: var(--forest); }
@@ -526,3 +530,140 @@ html, body { background: #011815; }
 .sf-v { white-space: nowrap; }
 .w7.focus .w7-bar { background: rgba(1,43,40,.2); }
 .w7.focus .w7-bar i { background: var(--forest); }
+
+/* ===== Proposal: richer idle (2-hour weather card, now block, agenda), night view stays minimal ===== */
+.idle-info { top: 150px; }
+.idle-nd { margin-top: 6px; font-size: 22px; line-height: 30px; color: var(--sage); }
+.idle-nd:empty { display: none; }
+.idle-wx-row { display: none; }
+.idle-now { display: flex; align-items: center; margin-top: 22px; }
+.idle-now:empty { display: none; }
+.in-ic { display: block; width: 64px; height: 64px; color: var(--gold); margin-right: 18px; flex: none; }
+.in-ic svg { display: block; width: 64px; height: 64px; }
+.in-t { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 88px; line-height: 80px; font-variant-numeric: lining-nums; margin-right: 24px; }
+.in-tx { display: flex; flex-direction: column; min-width: 0; }
+.in-1 { font-size: 26px; font-weight: 700; line-height: 34px; }
+.in-2 { font-size: 21px; line-height: 28px; color: #C9D6D2; }
+.in-2 b { color: #7FB3C9; font-weight: 700; }
+.idle-hk { margin-top: 26px; font-size: 16px; font-weight: 700; letter-spacing: 4px; color: var(--gold); }
+.idle-hk:empty { display: none; }
+.idle-hours { display: flex; margin-top: 12px; width: 724px; border-radius: 18px; border: 1px solid var(--line); background: rgba(11,58,53,.55); overflow: hidden; }
+.ih { flex: 1; width: auto; margin: 0; padding: 14px 0 14px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; text-align: center; }
+.ih:first-child { border-left: 0; }
+.ih:last-child { margin-right: 0; }
+.ih-h { font-size: 19px; font-weight: 700; color: var(--sage); }
+.ih-ic { width: 46px; height: 46px; margin: 8px auto 4px; }
+.ih-ic svg { width: 46px; height: 46px; }
+.ih-t { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 38px; line-height: 40px; font-variant-numeric: lining-nums; }
+.ih-bar { width: 64px; height: 5px; margin: 10px auto 0; border-radius: 3px; background: rgba(127,179,201,.18); overflow: hidden; }
+.ih-bar i { display: block; height: 5px; border-radius: 3px; background: #7FB3C9; }
+.ih-p { margin-top: 5px; font-size: 16px; line-height: 20px; height: 20px; color: #7FB3C9; }
+.ih-p.low { color: var(--sage); opacity: .7; }
+.sun { margin-top: 18px; }
+.sun-cap:empty { display: none; }
+.idle-ag { margin-top: 6px; }
+.idle-ag:empty { display: none; }
+.ia-k { font-size: 16px; font-weight: 700; letter-spacing: 4px; color: var(--gold); margin-bottom: 6px; }
+.ia-ev { display: flex; align-items: center; font-size: 24px; line-height: 38px; }
+.ia-ev .cal-dot { margin-right: 14px; }
+.ia-t { width: 104px; flex: none; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ia-n { color: #C9D6D2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.idle-next { display: none; }
+/* Night view: the calm version — no extras */
+.stage.idle.night .idle-wx-row { display: flex; opacity: .75; }
+.stage.idle.night .idle-next { display: block; }
+.stage.idle.night .idle-now, .stage.idle.night .idle-ag, .stage.idle.night .idle-nd, .stage.idle.night .idle-hk, .stage.idle.night .idle-hours { display: none; }
+.stage.idle.night .idle-info { top: 330px; }
+
+/* ===== Proposal: All apps shows only the kept apps + TV stats bar ===== */
+.all-view { height: 700px; }
+.all-stats { position: absolute; left: 96px; right: 96px; top: 900px; height: 108px; display: flex; padding: 22px 32px 0; border-radius: 20px; border: 1px solid var(--line); background: rgba(11,58,53,.55); transition: opacity .3s ease; }
+.all-stats.off { opacity: 0; }
+.st-c { flex: 1; margin-right: 48px; min-width: 0; }
+.st-c:last-child { margin-right: 0; }
+.st-top { display: flex; align-items: baseline; justify-content: space-between; }
+.st-k { font-size: 17px; font-weight: 700; letter-spacing: 4px; color: var(--gold); }
+.st-v { font-size: 22px; font-weight: 700; color: var(--ivory); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-bar { height: 8px; margin-top: 16px; border-radius: 4px; background: rgba(169,189,183,.18); overflow: hidden; }
+.st-bar i { display: block; height: 8px; border-radius: 4px; background: var(--gold); transform-origin: 0 50%; transition: transform .6s ease; }
+.st-c.hot .st-bar i { background: #E8A15A; }
+.all-more { top: 868px; }
+
+/* ===== Proposal: Weather screen spacing on one rhythm (8px grid: 16 / 24 / 40) + hourly wind ===== */
+.wx2 { height: 772px; }
+.wh-hero { top: 0; width: 960px; height: 224px; align-items: center; }
+.wh-ic { width: 136px; height: 136px; margin-right: 32px; }
+.wh-ic svg { width: 136px; height: 136px; }
+.wh-now { width: 320px; }
+.wh-t { font-size: 120px; line-height: 104px; }
+.wh-c { margin-top: 12px; font-size: 28px; line-height: 36px; }
+.wh-hl { margin-top: 4px; font-size: 22px; line-height: 30px; }
+.wh-sum { padding-left: 40px; padding-top: 4px; padding-bottom: 4px; }
+.wh-line { margin: 0; font-size: 23px; line-height: 38px; }
+.wh-det { width: 744px; height: 224px; }
+.wd { width: 232px; height: 104px; margin: 0 0 16px 24px; padding: 16px 20px; border-width: 1px; }
+.wd:nth-child(3n+1) { margin-left: 0; }
+.wd:nth-child(n+4) { margin-bottom: 0; }
+.wh-det .wd { box-sizing: border-box; }
+.wd-k { font-size: 17px; line-height: 20px; }
+.wd-v { margin-top: 8px; font-size: 30px; line-height: 34px; }
+.wd-v small { font-size: 17px; }
+.wd-s { margin-top: 2px; font-size: 15px; line-height: 20px; }
+.wx-sec { top: 264px; font-size: 18px; line-height: 24px; }
+.wx-chart { top: 296px; height: 240px; }
+.wk7 { top: 556px; }
+.w7 { height: 216px; width: 228px; margin-right: 22px; padding: 20px 20px 0; border-width: 1px; }
+.w7-d { font-size: 20px; line-height: 24px; letter-spacing: 3px; }
+.w7-ic { width: 60px; height: 60px; margin-top: 12px; }
+.w7-ic svg { width: 60px; height: 60px; }
+.w7-p { margin-top: 4px; }
+.w7-t { margin-top: 2px; line-height: 36px; }
+.w7-bar { margin-top: 12px; height: 6px; }
+.w7-bar i { height: 6px; }
+
+/* ===== Proposal: globe lit by the real sun — no fixed shine; a soft atmosphere edge instead ===== */
+.globe-rim { background: radial-gradient(circle at 50% 50%, rgba(1,24,21,0) 70%, rgba(1,24,21,.35) 100%);
+  box-shadow: 0 0 0 2px rgba(169,189,183,.22), 0 0 28px rgba(127,179,201,.10), 0 0 70px rgba(235,180,44,.10); }
+
+/* ===== Proposal: cleaner menu, Updates page, TV info page ===== */
+.mi { position: relative; }
+.mi-badge { position: absolute; right: 20px; top: 50%; margin-top: -15px; height: 30px; line-height: 30px; padding: 0 12px; border-radius: 15px; background: var(--gold); color: var(--forest); font-size: 17px; font-weight: 700; }
+.mi-badge:empty { display: none; }
+.mi.focus .mi-badge { background: var(--forest); color: var(--gold); }
+.ud { display: flex; padding-top: 24px; }
+.ud-l { width: 820px; margin-right: 88px; }
+.ud-r { flex: 1; padding-left: 64px; border-left: 1px solid var(--line); }
+.ud-k { font-size: 18px; font-weight: 700; letter-spacing: 4px; color: var(--gold); }
+.ud-v { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 132px; line-height: 132px; margin-top: 12px; font-variant-numeric: lining-nums; }
+.ud-st { display: flex; align-items: center; margin-top: 16px; font-size: 28px; font-weight: 700; color: #C9D6D2; }
+.ud-st i { width: 14px; height: 14px; border-radius: 50%; background: #7CC4A4; margin-right: 16px; }
+.ud-st.new { color: var(--gold); }
+.ud-st.new i { background: var(--gold); }
+.ud-btns { display: flex; flex-wrap: wrap; margin-top: 16px; }
+.ud-steps { margin: 24px 0 0; padding-left: 36px; font-size: 26px; line-height: 38px; color: #DCE5E1; }
+.ud-steps li { margin-bottom: 24px; padding-left: 8px; }
+.ti { display: flex; padding-top: 8px; }
+.ti-rows { width: 820px; margin-right: 88px; }
+.ti .ab-k { width: 300px; }
+.ti-gs { flex: 1; display: flex; justify-content: space-between; padding-top: 24px; }
+.ti-g { position: relative; width: 240px; text-align: center; }
+.ti-g svg { display: block; width: 200px; height: 200px; margin: 0 auto; }
+.ti-arc { transition: stroke-dasharray .6s ease; }
+.ti-pc { position: absolute; left: 0; top: 64px; width: 240px; font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 60px; line-height: 72px; font-variant-numeric: lining-nums; }
+.ti-k { margin-top: 24px; font-size: 18px; font-weight: 700; letter-spacing: 4px; color: var(--gold); }
+.ti-d { margin-top: 8px; font-size: 20px; line-height: 28px; color: #C9D6D2; }
+
+/* ===== Proposal: iPhone card with Wi-Fi QR on the right ===== */
+.card { left: 360px; top: 220px; width: 1200px; min-height: 560px; padding: 56px 480px 56px 64px; }
+.card-wifi { position: absolute; right: 0; top: 0; bottom: 0; width: 416px; padding: 56px 48px; border-left: 1px solid rgba(235,180,44,.25); text-align: center; }
+.cw-k { font-size: 18px; font-weight: 700; letter-spacing: 4px; color: var(--gold); }
+.cw-qr { width: 256px; height: 256px; margin: 24px auto 0; padding: 14px; border-radius: 18px; background: var(--ivory); }
+.cw-qr svg { display: block; width: 228px; height: 228px; }
+.cw-qr.empty { background: rgba(11,58,53,.7); border: 2px dashed var(--line); color: var(--sage); padding: 72px; }
+.cw-qr.empty svg { width: 108px; height: 108px; }
+.cw-ssid { margin-top: 20px; font-size: 26px; font-weight: 700; line-height: 34px; }
+.cw-note { margin-top: 8px; font-size: 20px; line-height: 28px; color: var(--sage); }
+
+/* Weekend colour by day: coral red Monday to Saturday (1A), soft blue on Sundays (1B) */
+.week { --weekend: #E07A6A; --weekend-on-ivory: #B5503F; }
+.week.sun-start { --weekend: #9FB4D9; --weekend-on-ivory: #4A6496; }

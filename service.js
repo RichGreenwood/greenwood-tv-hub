@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.6.0';
+var VERSION = '0.7.0';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
@@ -658,6 +658,62 @@ function readCalendar(force, cb) {
   });
 }
 
+/* ---------- Quick play relay: the hub's audio player cannot read Shoutcast "ICY" answers, some redirects
+   or streams whose certificates are newer than the TV's own list. The helper fetches the stream and passes it on
+   as plain audio. Certificates are still checked. Only http(s), only for the hub on this TV (127.0.0.1). ---------- */
+var netm = require('net'), tlsm = require('tls'), urlm = require('url');
+function radioRelay(u, res, depth) {
+  var p = urlm.parse(String(u || ''));
+  if (!/^https?:$/.test(p.protocol || '') || !p.hostname || depth > 3) { res.statusCode = 400; res.end(); return; }
+  var secure = p.protocol === 'https:', port = +p.port || (secure ? 443 : 80), path = p.path || '/';
+  var sock = secure ? tlsm.connect({ host: p.hostname, port: port, servername: p.hostname }) : netm.connect({ host: p.hostname, port: port });
+  var chunks = [], got = 0, passing = false, finished = false;
+  function fail(code) { if (finished) { return; } finished = true; try { sock.destroy(); } catch (e) { /* ignore */ } if (!res.headersSent) { res.statusCode = code; res.end(); } else { try { res.end(); } catch (e2) { /* ignore */ } } }
+  sock.setTimeout(15000, function () { fail(504); });
+  sock.on(secure ? 'secureConnect' : 'connect', function () {
+    sock.write('GET ' + path + ' HTTP/1.0\r\nHost: ' + p.host + '\r\nUser-Agent: GreenwoodHub/' + VERSION + '\r\nAccept: */*\r\nIcy-MetaData: 0\r\nConnection: close\r\n\r\n');
+  });
+  sock.on('data', function (d) {
+    if (passing) { return; }
+    chunks.push(d); got += d.length;
+    var buf = Buffer.concat(chunks), txt = buf.toString('binary'), end = txt.indexOf('\r\n\r\n');
+    if (end < 0) { if (got > 16384) { fail(502); } return; }
+    var head = txt.slice(0, end), st = /^(?:HTTP\/1\.[01]|ICY) (\d{3})/.exec(head), code = st ? +st[1] : 0;
+    var hv = function (n) { var m = new RegExp('^' + n + ':\\s*(.+)$', 'im').exec(head); return m ? m[1].trim() : ''; };
+    if (code >= 300 && code < 400 && hv('location')) {
+      finished = true; sock.destroy();
+      radioRelay(urlm.resolve(u, hv('location')), res, depth + 1);
+      return;
+    }
+    if (code !== 200) { fail(502); return; }
+    passing = true; sock.setTimeout(0);
+    res.writeHead(200, { 'Content-Type': hv('content-type') || 'audio/mpeg', 'Cache-Control': 'no-cache' });
+    res.write(buf.slice(end + 4));
+    sock.pipe(res);
+  });
+  sock.on('error', function () { fail(502); });
+  sock.on('end', function () { if (!passing) { fail(502); } });
+  res.on('close', function () { finished = true; try { sock.destroy(); } catch (e) { /* ignore */ } });
+}
+
+/* ---------- Wi-Fi QR for the iPhone card ---------- */
+function wifiEsc(v) { return String(v).replace(/([\\;,:"])/g, '\\$1'); }
+function wifiSsid(cb) {
+  var done = false;
+  function fin(v) { if (!done) { done = true; cb(v); } }
+  setTimeout(function () { fin(null); }, 1500);
+  try { tizen.systeminfo.getPropertyValue('WIFI_NETWORK', function (w) { fin(w && w.status === 'ON' ? w.ssid : null); }, function () { fin(null); }); } catch (e) { fin(null); }
+}
+function wifiInfo(cb) {
+  wifiSsid(function (ssid) {
+    var w = readCfg().wifi || null, out = { ok: true, ssid: ssid || (w ? w.ssid : null), qr: null };
+    if (w && w.pass && out.ssid && (!ssid || ssid === w.ssid)) {
+      out.qr = 'WIFI:T:' + (w.type || 'WPA') + ';S:' + wifiEsc(out.ssid) + ';P:' + wifiEsc(w.pass) + ';;';
+    }
+    cb(out);
+  });
+}
+
 /* ---------- One-time calendar setup (code on the TV, links from the laptop) ---------- */
 var setup = { pin: '', until: 0, tries: 0, server: null, done: false, count: 0, timer: null };
 var ICS_RE = /^https:\/\/calendar\.google\.com\/calendar\/ical\/[A-Za-z0-9%._@+\-]+\/(private-[0-9a-f]+|public)\/basic\.ics$/;
@@ -675,6 +731,11 @@ function startSetup() {
   setup.until = Date.now() + 10 * 60000;
   setup.tries = 0; setup.done = false; setup.count = 0;
   setup.server = http.createServer(function (req, res) {
+    if (req.method === 'GET' && req.url === '/ssid') {
+      res.setHeader('Content-Type', 'application/json');
+      wifiSsid(function (ssid) { res.end(JSON.stringify({ ssid: ssid || '' })); });
+      return;
+    }
     if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
@@ -699,13 +760,16 @@ function startSetup() {
         return { url: String(c.url || '').trim(), label: String(c.label || 'Calendar').replace(/[^\w À-ɏ+&-]/g, '').slice(0, 24) };
       });
       var bad = list.filter(function (c) { return !ICS_RE.test(c.url); });
-      if (!list.length || bad.length) { res.statusCode = 400; res.end('{"ok":false,"error":"only Google Calendar iCal links are accepted"}'); return; }
+      var wifi = data.wifi && data.wifi.pass ? { ssid: String(data.wifi.ssid || '').slice(0, 32), pass: String(data.wifi.pass).slice(0, 63), type: 'WPA' } : null;
+      if (wifi && (!wifi.ssid || wifi.pass.length < 8)) { res.statusCode = 400; res.end('{"ok":false,"error":"Wi-Fi name and a password of 8 or more characters are needed"}'); return; }
+      if ((!list.length && !wifi) || bad.length) { res.statusCode = 400; res.end('{"ok":false,"error":"only Google Calendar iCal links are accepted"}'); return; }
       var cfg = readCfg();
-      cfg.calendars = list;
+      if (list.length) { cfg.calendars = list; }
+      if (wifi) { cfg.wifi = wifi; }
       if (!writeCfg(cfg)) { res.statusCode = 500; res.end('{"ok":false,"error":"could not save"}'); return; }
       calCache.at = 0; calCache.events = [];
       setup.done = true; setup.count = list.length;
-      res.end(JSON.stringify({ ok: true, count: list.length }));
+      res.end(JSON.stringify({ ok: true, count: list.length, wifi: !!wifi }));
       setTimeout(stopSetup, 1500);
     });
   });
@@ -733,6 +797,8 @@ var SETUP_PAGE = '<!doctype html><html lang="en"><head><meta charset="utf-8"><me
   '<label>Code on the TV</label><input id="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456">' +
   '<label>Calendar 1<small>Name, then its secret iCal address</small></label><div class="row"><input id="l1" value="Personal"><input id="u1" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></div>' +
   '<label>Calendar 2 <small>Optional</small></label><div class="row"><input id="l2" value="Aerones"><input id="u2" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></div>' +
+  '<label>Home Wi-Fi <small>Optional. For the QR code on the TV&#39;s iPhone card. The password stays on the TV only.</small></label>' +
+  '<div class="row"><input id="ws" placeholder="Network name"><input id="wp" type="password" autocomplete="off" placeholder="Wi-Fi password"></div>' +
   '<button id="b">Send to TV</button><div id="m"></div>' +
   '<details><summary>Where do I find the secret iCal address?</summary><ol>' +
   '<li>On a computer, open calendar.google.com.</li><li>Left side: hover the calendar → ⋮ → <b>Settings and sharing</b>.</li>' +
@@ -741,12 +807,13 @@ var SETUP_PAGE = '<!doctype html><html lang="en"><head><meta charset="utf-8"><me
   '</div><script>' +
   'var b=document.getElementById("b"),m=document.getElementById("m");function v(i){return document.getElementById(i).value.trim();}' +
   'b.onclick=function(){var c=[];if(v("u1"))c.push({label:v("l1")||"Calendar 1",url:v("u1")});if(v("u2"))c.push({label:v("l2")||"Calendar 2",url:v("u2")});' +
-  'if(!c.length){m.className="bad";m.textContent="Paste at least one link.";return;}b.disabled=true;m.className="";m.textContent="Sending…";' +
+  'var w=v("wp")?{ssid:v("ws"),pass:document.getElementById("wp").value}:null;if(!c.length&&!w){m.className="bad";m.textContent="Paste a calendar link or a Wi-Fi password.";return;}b.disabled=true;m.className="";m.textContent="Sending…";' +
   'var x=new XMLHttpRequest();x.open("POST","/setup");x.setRequestHeader("Content-Type","application/json");' +
   'x.onload=function(){var r={};try{r=JSON.parse(x.responseText);}catch(e){}if(r.ok){m.className="ok";m.textContent="Done ✓ "+r.count+" calendar(s) saved. You can close this page.";}' +
   'else{b.disabled=false;m.className="bad";m.textContent=r.error||"Did not work. Check the code and links.";}};' +
   'x.onerror=function(){b.disabled=false;m.className="bad";m.textContent="TV not reachable. Is the code still on the TV?";};' +
-  'x.send(JSON.stringify({pin:v("pin").replace(/\\D/g,""),calendars:c}));};</script></body></html>';
+  'x.send(JSON.stringify({pin:v("pin").replace(/\\D/g,""),calendars:c,wifi:w}));};' +
+  'var ss=new XMLHttpRequest();ss.open("GET","/ssid");ss.onload=function(){try{var r=JSON.parse(ss.responseText);if(r.ssid&&!v("ws"))document.getElementById("ws").value=r.ssid;}catch(e){}};ss.send();</script></body></html>';
 
 /* ---------- Sleep timer ---------- */
 var sleep = { endsAt: 0, timer: null };
@@ -825,6 +892,48 @@ function status(cb0) {
   } catch (e) { cb(out); }
 }
 
+
+/* ---------- TV info and stats ---------- */
+var cpuLast = null;
+function readCpu() {
+  try {
+    var line = String(fs.readFileSync('/proc/stat', 'utf8')).split('\n')[0].split(/\s+/).slice(1).map(Number);
+    var idle = line[3] + (line[4] || 0), total = 0;
+    for (var i = 0; i < line.length; i++) { total += line[i] || 0; }
+    var prev = cpuLast; cpuLast = { idle: idle, total: total };
+    if (!prev || total <= prev.total) { return null; }
+    return Math.max(0, Math.min(1, 1 - (idle - prev.idle) / (total - prev.total)));
+  } catch (e) { return null; }
+}
+function readMem() {
+  try {
+    var txt = String(fs.readFileSync('/proc/meminfo', 'utf8')), m = {};
+    txt.split('\n').forEach(function (l) { var p = /^(\w+):\s+(\d+)/.exec(l); if (p) { m[p[1]] = +p[2] * 1024; } });
+    var avail = m.MemAvailable || (m.MemFree + (m.Buffers || 0) + (m.Cached || 0));
+    return m.MemTotal ? { total: m.MemTotal, avail: avail } : null;
+  } catch (e) { return null; }
+}
+function sysProp(name, pick, cb) {
+  var done = false;
+  function fin(v) { if (!done) { done = true; cb(v); } }
+  setTimeout(function () { fin(null); }, 1500);
+  try { tizen.systeminfo.getPropertyValue(name, function (p) { try { fin(pick(p)); } catch (e) { fin(null); } }, function () { fin(null); }); } catch (e) { fin(null); }
+}
+function stats(cb) {
+  var out = { ok: true, cpu: readCpu(), mem: readMem(), storage: null };
+  sysProp('STORAGE', function (s) { return { free: s.units[0].availableCapacity, total: s.units[0].capacity }; }, function (v) { out.storage = v; cb(out); });
+}
+function info(cb) {
+  var out = { ok: true, model: null, platform: null, width: null, height: null, ssid: null };
+  try { out.platform = tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version'); } catch (e) { out.platform = null; }
+  sysProp('BUILD', function (b) { return b.model; }, function (model) {
+    out.model = model;
+    sysProp('DISPLAY', function (d) { return [d.resolutionWidth, d.resolutionHeight]; }, function (wh) {
+      if (wh) { out.width = wh[0]; out.height = wh[1]; }
+      sysProp('WIFI_NETWORK', function (w) { return w.status === 'ON' ? w.ssid : null; }, function (ssid) { out.ssid = ssid; cb(out); });
+    });
+  });
+}
 
 /* ---------- Updates: Ričards presses "Install" in About; the hub switches TizenBrew to the new tag ---------- */
 function verNum(v) {
@@ -1020,6 +1129,11 @@ var server = http.createServer(function (req, res) {
     return;
   }
   if (req.method === 'GET' && url === '/status') { status(function (o) { res.end(JSON.stringify(o)); }); return; }
+  if (req.method === 'GET' && url === '/stats') { stats(function (o) { res.end(JSON.stringify(o)); }); return; }
+  if (req.method === 'GET' && url === '/info') { info(function (o) { res.end(JSON.stringify(o)); }); return; }
+  var rq = /^\/radio\?u=(.+)$/.exec(url);
+  if (req.method === 'GET' && rq) { var ru = ''; try { ru = decodeURIComponent(rq[1]); } catch (e) { ru = ''; } radioRelay(ru, res, 0); return; }
+  if (req.method === 'GET' && url === '/wifi') { wifiInfo(function (o) { res.end(JSON.stringify(o)); }); return; }
   var cm = /^\/calendar(\?force=1)?$/.exec(url);
   if (req.method === 'GET' && cm) { readCalendar(!!cm[1], function (o) { res.end(JSON.stringify(o)); }); return; }
   if (req.method === 'GET' && url === '/setup/start') {

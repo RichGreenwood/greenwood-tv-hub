@@ -83,29 +83,19 @@
       "group": "hub"
     },
     {
-      "id": "about",
-      "label": "About",
+      "id": "updates",
+      "label": "Updates",
       "group": "hub"
     },
     {
-      "id": "settings",
-      "label": "Settings",
-      "group": "samsung"
+      "id": "tvinfo",
+      "label": "TV info",
+      "group": "hub"
     },
     {
-      "id": "sources",
-      "label": "Sources",
-      "group": "samsung"
-    },
-    {
-      "id": "internet",
-      "label": "Internet",
-      "group": "samsung"
-    },
-    {
-      "id": "samsung",
-      "label": "Samsung Home",
-      "group": "samsung"
+      "id": "about",
+      "label": "About",
+      "group": "hub"
     }
   ],
   "idleSeconds": 20,

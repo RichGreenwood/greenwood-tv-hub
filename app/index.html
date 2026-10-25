@@ -99,6 +99,12 @@
         <li><span data-i18n="card4">Choose</span> <b id="card-tv">Greenwood TV</b>.</li>
       </ol>
       <div class="card-hint" data-i18n="cardHint">Back closes this card</div>
+      <div class="card-wifi" id="card-wifi">
+        <div class="cw-k" data-i18n="wifiJoin">JOIN HOME WI-FI</div>
+        <div class="cw-qr" id="cw-qr"></div>
+        <div class="cw-ssid" id="cw-ssid"></div>
+        <div class="cw-note" id="cw-note"></div>
+      </div>
     </div>
   </div>
 
@@ -106,12 +112,16 @@
   <div class="idle-info" id="idle-info">
     <div class="idle-date" id="idle-date"></div>
     <div class="idle-date2" id="idle-date2"></div>
+    <div class="idle-nd" id="idle-nd"></div>
     <div class="idle-wx-row"><span class="idle-wx" id="idle-wx"></span><span id="idle-weather"></span></div>
+    <div class="idle-now" id="idle-now"></div>
+    <div class="idle-hk" id="idle-hk"></div>
     <div class="idle-hours" id="idle-hours"></div>
     <div class="sun" id="sun">
       <svg id="sun-svg" viewBox="0 0 724 250" width="724" height="250"></svg>
       <div class="sun-cap" id="sun-cap"></div>
     </div>
+    <div class="idle-ag" id="idle-ag"></div>
     <div class="idle-next" id="idle-next"></div>
     <div class="idle-radio" id="idle-radio"></div>
   </div>
@@ -129,6 +139,7 @@
       <div class="all-empty" id="all-empty" hidden data-i18n="noApps">No apps found.</div>
     </div>
     <div class="all-more" id="all-more"></div>
+    <div class="all-stats off" id="all-stats"><div class="st-c" id="st-storage"></div><div class="st-c" id="st-mem"></div><div class="st-c" id="st-cpu"></div></div>
   </div>
 
   <!-- Screens: Calendar, Weather, Change look, Sleep timer, About, Calendar setup -->

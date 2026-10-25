@@ -75,5 +75,20 @@
       "id": "3201909019271",
       "name": "Privacy Choices"
     }
+  ],
+  "_show_note": "All apps shows only these IDs (the apps Ričards keeps). Empty or missing = show every usable app as in 0.6.0.",
+  "_show": [
+    "3201807016597",
+    "3201806016390",
+    "3202204027283",
+    "3202301029760",
+    "org.tizen.browser",
+    "3201505002589",
+    "3201907018807",
+    "3201511006428",
+    "3201606009684",
+    "3201701011479",
+    "11111300404",
+    "111299001912"
   ]
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — 2026-10-25
+- Quick play radio fixed. Each station address now gets 12 seconds to start before the next one is tried (0.6.0 could wait on "Connecting…" forever), a failed start is counted once (0.6.0 could skip the backup address), and the TV no longer tries .m3u8 streams it cannot play. Every address is also tried through the hub helper, which handles old Shoutcast servers, redirects and stations whose certificates are newer than the TV's own list (certificates are still checked). About shows the last Quick play result.
+- Week strip: on Sundays it starts with today and runs to Saturday; Monday to Saturday it is Monday to Sunday. Saturday and Sunday in their own colour: soft blue on Sundays, coral red the rest of the week.
+- Idle screen: name days, a "now" block (temperature, condition, feels like, rain outlook), next 10 hours in 2-hour steps with rain chance, time to sunset inside the sun arc with the day length under the horizon, today's next two meetings. Night view stays calm and centred.
+- Weather screen: spacing on one 8 px grid, roomier detail tiles, day length under sunrise/sunset, and a wind row (direction arrow + m/s, amber in strong gusts) every 3 hours.
+- Daylight globe lit by the real sun: day and night with a soft gold twilight band, one slow turn every 4 minutes, redrawn only when it moves.
+- All apps shows only the kept apps (apps.json `_show`, 12 for now) and a stats bar for storage, memory and processor.
+- Menu: Change look, Sleep timer, Updates, TV info, About (Samsung shortcuts removed). New Updates page (install, check, previous version; badge in the menu). New TV info page (model, system, screen, network, hub, remote keys; ring gauges for storage, memory, processor). About links to both.
+- iPhone card: "Join home Wi-Fi" QR code. The network name comes from the TV; the password is added once on the phone setup page (Connect calendars) and kept only on the TV.
+
 ## 0.6.0 — 2026-10-25
 - Weather screen redesigned: now, feels like, high/low and a plain-language outlook (rain timing, wind, tomorrow); wind, rain, humidity, UV, pressure, sunrise tiles; 24-hour temperature curve with rain chance; 7-day forecast with temperature range bars.
 - Daylight screen: Greenwood-style globe turning in the middle of the sun path (drawn on the TV from Natural Earth land data, public domain; slows down or stops by itself on a slow TV), Rīga marked; first/last light, golden hours, solar noon, day length and change vs yesterday; Moon card (phase, % lit, age, next full and new moon); daylight through the year.
