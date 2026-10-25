@@ -1,27 +1,151 @@
 {
   "_note": "Quick play stations, picked by Ričards on the Quick Play Stations page (25 Oct 2026). Each station lists streams in order; the hub tries the next one if a stream fails. Official public streams of each station where one could be found.",
   "groups": [
-    { "id": "lv", "stations": [
-      { "id": "swhrock", "name": "SWH Rock", "sub": "Rock", "urls": ["https://live.radioswh.lv:8443/rockmp3", "http://80.232.162.149:8000/rock96mp3"] },
-      { "id": "lr5", "name": "Pieci", "sub": "LR5", "urls": ["http://live.pieci.lv/live19-hq.mp3"] },
-      { "id": "kurzemes", "name": "Kurzemes Radio", "sub": "Kurzeme", "urls": ["http://31.170.16.6:8000/;", "http://31.170.16.6:8000/stream"] },
-      { "id": "lr2", "name": "Latvijas Radio 2", "sub": "LR2", "urls": ["http://lr2mp1.latvijasradio.lv:8002/;", "http://lr2mp0.latvijasradio.lv:8000/;", "https://muste.latvijasradio.lv/shoutcast/mp4:lr2a.stream/playlist.m3u8"] }
-    ]},
-    { "id": "lounge", "stations": [
-      { "id": "loungefm", "name": "Lounge FM", "sub": "Lounge", "urls": ["https://stream.loungefm.lv:8443/lounge"] },
-      { "id": "jazzradio", "name": "Jazz Radio", "sub": "Jazz", "urls": ["http://jazzradio.ice.infomaniak.ch/jazzradio-high.mp3"] },
-      { "id": "swissjazz", "name": "Radio Swiss Jazz", "sub": "Jazz", "urls": ["http://stream.srg-ssr.ch/m/rsj/mp3_128"] },
-      { "id": "jazzlounge", "name": "Jazz Radio Lounge", "sub": "Lounge", "urls": ["http://jazzlounge.ice.infomaniak.ch/jazzlounge-high.mp3"] },
-      { "id": "lautlounge", "name": "Lounge (laut.fm)", "sub": "Lounge", "urls": ["https://stream.laut.fm/lounge"] }
-    ]},
-    { "id": "lofi", "stations": [
-      { "id": "reylofi", "name": "REYFM Lo-fi", "sub": "Lo-fi", "urls": ["https://listen.reyfm.de/lofi_320kbps.mp3"] },
-      { "id": "chillax", "name": "Chillax FM", "sub": "Chill", "urls": ["https://streams.chillaxfm.lv/chillaxfm", "https://streams.chillaxfm.lv/chillax"] },
-      { "id": "nordicchill", "name": "Nordic Chillout Radio", "sub": "Chillout", "urls": ["https://play.radioking.io/nordic-chillout-radio/736489"] }
-    ]},
-    { "id": "news", "stations": [
-      { "id": "bbcws", "name": "BBC World Service", "sub": "News", "urls": ["http://stream.live.vc.bbcmedia.co.uk/bbc_world_service"] },
-      { "id": "franceinter", "name": "France Inter", "sub": "Talk", "urls": ["https://icecast.radiofrance.fr/franceinter-midfi.mp3", "https://icecast.radiofrance.fr/franceinter-hifi.aac"] }
-    ]}
+    {
+      "id": "lv",
+      "stations": [
+        {
+          "id": "swhrock",
+          "name": "SWH Rock",
+          "sub": "Rock",
+          "urls": [
+            "https://live.radioswh.lv:8443/rockmp3",
+            "http://80.232.162.149:8000/rock96mp3"
+          ]
+        },
+        {
+          "id": "skonto",
+          "name": "Radio Skonto",
+          "sub": "Pop",
+          "urls": [
+            "https://stream.radioskonto.lv:8443/stereo"
+          ]
+        },
+        {
+          "id": "lr5",
+          "name": "Pieci",
+          "sub": "LR5",
+          "urls": [
+            "http://live.pieci.lv/live19-hq.mp3"
+          ]
+        },
+        {
+          "id": "kurzemes",
+          "name": "Kurzemes Radio",
+          "sub": "Kurzeme",
+          "urls": [
+            "http://31.170.16.6:8000/;",
+            "http://31.170.16.6:8000/stream"
+          ]
+        },
+        {
+          "id": "lr2",
+          "name": "Latvijas Radio 2",
+          "sub": "LR2",
+          "urls": [
+            "http://lr2mp1.latvijasradio.lv:8002/;",
+            "http://lr2mp0.latvijasradio.lv:8000/;",
+            "https://muste.latvijasradio.lv/shoutcast/mp4:lr2a.stream/playlist.m3u8"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lounge",
+      "stations": [
+        {
+          "id": "loungefm",
+          "name": "Lounge FM",
+          "sub": "Lounge",
+          "urls": [
+            "https://stream.loungefm.lv:8443/lounge"
+          ]
+        },
+        {
+          "id": "jazzradio",
+          "name": "Jazz Radio",
+          "sub": "Jazz",
+          "urls": [
+            "http://jazzradio.ice.infomaniak.ch/jazzradio-high.mp3"
+          ]
+        },
+        {
+          "id": "swissjazz",
+          "name": "Radio Swiss Jazz",
+          "sub": "Jazz",
+          "urls": [
+            "http://stream.srg-ssr.ch/m/rsj/mp3_128"
+          ]
+        },
+        {
+          "id": "jazzlounge",
+          "name": "Jazz Radio Lounge",
+          "sub": "Lounge",
+          "urls": [
+            "http://jazzlounge.ice.infomaniak.ch/jazzlounge-high.mp3"
+          ]
+        },
+        {
+          "id": "lautlounge",
+          "name": "Lounge (laut.fm)",
+          "sub": "Lounge",
+          "urls": [
+            "https://stream.laut.fm/lounge"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lofi",
+      "stations": [
+        {
+          "id": "reylofi",
+          "name": "REYFM Lo-fi",
+          "sub": "Lo-fi",
+          "urls": [
+            "https://listen.reyfm.de/lofi_320kbps.mp3"
+          ]
+        },
+        {
+          "id": "chillax",
+          "name": "Chillax FM",
+          "sub": "Chill",
+          "urls": [
+            "https://streams.chillaxfm.lv/chillaxfm",
+            "https://streams.chillaxfm.lv/chillax"
+          ]
+        },
+        {
+          "id": "nordicchill",
+          "name": "Nordic Chillout Radio",
+          "sub": "Chillout",
+          "urls": [
+            "https://play.radioking.io/nordic-chillout-radio/736489"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "news",
+      "stations": [
+        {
+          "id": "bbcws",
+          "name": "BBC World Service",
+          "sub": "News",
+          "urls": [
+            "http://stream.live.vc.bbcmedia.co.uk/bbc_world_service"
+          ]
+        },
+        {
+          "id": "franceinter",
+          "name": "France Inter",
+          "sub": "Talk",
+          "urls": [
+            "https://icecast.radiofrance.fr/franceinter-midfi.mp3",
+            "https://icecast.radiofrance.fr/franceinter-hifi.aac"
+          ]
+        }
+      ]
+    }
   ]
 }

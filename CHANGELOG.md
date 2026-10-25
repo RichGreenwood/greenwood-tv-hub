@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2 — 2026-10-25
+- Quick play keeps playing. Once a station has played, a drop no longer turns it off: the stream ending, an error, a stall longer than 12 s or 20 s with no sound all reconnect by themselves (Reconnecting…), starting from the address that worked, waiting 2, 4, 8, 15, 30 then every 60 s.
+- Stations with newer certificates play. The hub helper now carries the current public root certificates (Let's Encrypt, Sectigo, Google, Amazon, DigiCert, GlobalSign …) and uses them when the TV's 2019 list cannot check a station. Certificates are always checked. On the TV, https stations go through the helper first, and an https address on the standard port is also tried over plain http as a last resort.
+- The helper closes a stream that sends nothing for 20 s, so the hub notices and reconnects instead of sitting silent.
+- Radio Skonto added to Latvian radio.
+
 ## 0.7.1 — 2026-10-25
 - Quick play uses Ričards's own station picks (14 stations): Latvian radio (SWH Rock, Pieci, Kurzemes Radio, Latvijas Radio 2), Lounge & jazz (Lounge FM, Jazz Radio, Radio Swiss Jazz, Jazz Radio Lounge, Lounge laut.fm), Lo-fi & chill (REYFM Lo-fi, Chillax FM, Nordic Chillout Radio) and a new News & talk row (BBC World Service, France Inter).
 

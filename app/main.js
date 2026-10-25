@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.7.1';
+  var VERSION = '0.7.2';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -1491,7 +1491,7 @@
   }
   function globeStop() { globe.on = false; clearTimeout(globe.timer); }
   /* ---------- Quick play radio: plays inside the hub, home stays on screen ---------- */
-  var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', routes: [], idx: 0, att: 0, retry: 0, timer: 0, why: [], last: null };
+  var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', routes: [], idx: 0, att: 0, retry: 0, timer: 0, wait: 0, why: [], last: null, played: false, drops: 0, good: 0, pos: 0, posAt: 0 };
   function radioLoad() {
     getJSON('radio.json?v=' + VERSION, function (err, d) {
       if (err || !d || !d.groups) { return; }
@@ -1503,16 +1503,33 @@
       renderRadio();
     });
   }
-  /* Quick play player. Each station tries its addresses in order, each first directly and then through the hub
-     helper (which copes with old Shoutcast servers, redirects and newer certificates). An attempt that has not
-     started playing within 12 s counts as failed, exactly once. The last result shows on About. */
-  var RADIO_TIMEOUT = 12000;
+  /* Quick play player.
+     Starting: each address is tried directly and through the hub helper (which copes with old Shoutcast servers,
+     redirects and certificates newer than the TV's own list). https addresses go through the helper first on the
+     TV, plain http ones directly first. An attempt that has not started playing within 12 s counts as failed,
+     exactly once. If nothing plays after two rounds the station is reported as not reachable.
+     Staying on: once a station has played, a drop never turns it off. The stream ending, an error, a stall
+     longer than 12 s or 20 s without progress all reconnect, starting from the address that last worked,
+     waiting 2, 4, 8, 15, 30 then every 60 s, until it plays again or it is switched off.
+     The last result shows on About. */
+  var RADIO_TIMEOUT = 12000, RADIO_BACKOFF = [2000, 4000, 8000, 15000, 30000, 60000];
   function radioRoutes(st) {
     var out = [];
+    function add(u) {
+      var hls = /\.m3u8(\?|$)/i.test(u), sec = /^https:/i.test(u);
+      if (ON_TV && hls) { return; }
+      var d = { src: u, via: 'direct', url: u }, h = { src: SERVICE + '/radio?u=' + encodeURIComponent(u), via: 'helper', url: u };
+      if (!ON_TV) { out.push(d); return; }
+      if (sec) { out.push(h, d); } else { out.push(d, h); }
+    }
+    st.urls.forEach(add);
+    /* an https address on the standard port is often also served over plain http: try that last */
     st.urls.forEach(function (u) {
-      var hls = /\.m3u8(\?|$)/i.test(u);
-      if (!(ON_TV && hls)) { out.push({ src: u, via: 'direct', url: u }); }
-      if (ON_TV && !hls) { out.push({ src: SERVICE + '/radio?u=' + encodeURIComponent(u), via: 'helper', url: u }); }
+      var m = /^https:\/\/([^\/:]+)(\/.*)?$/i.exec(u);
+      if (ON_TV && m && !/\.m3u8(\?|$)/i.test(u)) {
+        var hu = 'http://' + m[1] + (m[2] || '/');
+        if (st.urls.indexOf(hu) < 0) { add(hu); }
+      }
     });
     return out;
   }
@@ -1526,13 +1543,18 @@
       a.preload = 'none';
       a.addEventListener('playing', function () {
         if (radio.state === 'off') { return; }
-        clearTimeout(radio.timer); radio.state = 'playing'; radio.retry = 0; renderRadio();
-        var r = radio.routes[radio.idx];
-        radioNote(r ? (r.via === 'helper' ? 'playing via helper' : 'playing') : 'playing');
+        clearTimeout(radio.timer);
+        var r = radio.routes[radio.idx], again = radio.played;
+        radio.state = 'playing'; radio.retry = 0; radio.drops = 0; radio.played = true; radio.good = radio.idx;
+        radio.pos = a.currentTime; radio.posAt = Date.now();
+        renderRadio();
+        radioNote((again ? 'playing again' : 'playing') + (r && r.via === 'helper' ? ' via helper' : ''));
       });
+      a.addEventListener('timeupdate', function () { if (a.currentTime !== radio.pos) { radio.pos = a.currentTime; radio.posAt = Date.now(); } });
       a.addEventListener('waiting', function () { if (radio.state === 'playing') { radio.state = 'loading'; renderRadio(); radioArm(); } });
       a.addEventListener('stalled', function () { if (radio.state === 'playing') { radio.state = 'loading'; renderRadio(); radioArm(); } });
-      a.addEventListener('error', function () { radioFail(radio.att, 'error ' + (a.error ? a.error.code : '?')); });
+      a.addEventListener('ended', function () { radioFail(radio.att, 'stream ended'); });
+      a.addEventListener('error', function () { if (a.getAttribute('src')) { radioFail(radio.att, 'error ' + (a.error ? a.error.code : '?')); } });
       radio.audio = a;
     }
     return radio.audio;
@@ -1542,10 +1564,16 @@
     clearTimeout(radio.timer);
     radio.timer = setTimeout(function () { radioFail(att, 'timeout'); }, RADIO_TIMEOUT);
   }
+  /* watchdog: playing but the clock has not moved for 20 s = silently stuck */
+  setInterval(function () {
+    if (radio.state === 'playing' && radio.audio && Date.now() - (radio.posAt || Date.now()) > 20000) { radioFail(radio.att, 'no sound for 20 s'); }
+  }, 5000);
   function radioPlay(st) {
     if (st) { radio.cur = st; store('radio', { id: st.id }); }
     if (!radio.cur) { return; }
+    clearTimeout(radio.wait);
     radio.routes = radioRoutes(radio.cur); radio.idx = 0; radio.retry = 0; radio.why = [];
+    radio.played = false; radio.drops = 0; radio.good = 0;
     radio.state = 'loading'; renderRadio();
     radioStart();
   }
@@ -1566,14 +1594,29 @@
     radio.att++;
     clearTimeout(radio.timer);
     var r = radio.routes[radio.idx];
-    radio.why.push((r ? r.via : '') + ' ' + why);
+    radio.why.push((r ? r.via + ' ' : '') + why);
+    if (radio.why.length > 8) { radio.why.shift(); }
+    if (radio.played) {
+      /* it worked before: keep it on and reconnect, starting with the address that last worked */
+      var first = radio.state === 'playing';
+      if (!first && radio.idx + 1 < radio.routes.length) { radio.idx++; radioStart(); return; }
+      var delay = RADIO_BACKOFF[Math.min(radio.drops, RADIO_BACKOFF.length - 1)];
+      radio.drops++;
+      radio.idx = radio.good || 0;
+      radio.state = 'retry'; renderRadio();
+      try { radio.audio.pause(); } catch (e) { /* ignore */ }
+      radioNote('reconnecting: ' + why);
+      clearTimeout(radio.wait);
+      radio.wait = setTimeout(function () { if (radio.state === 'retry') { radioStart(); } }, first ? 300 : delay);
+      return;
+    }
     if (radio.idx + 1 < radio.routes.length) { radio.idx++; radioStart(); return; }
-    if (radio.retry < 1) { radio.retry++; radio.idx = 0; setTimeout(function () { if (radio.state !== 'off') { radioStart(); } }, 1500); return; }
-    radioNote('failed: ' + radio.why.slice(-2).join(', '));
+    if (radio.retry < 1) { radio.retry++; radio.idx = 0; clearTimeout(radio.wait); radio.wait = setTimeout(function () { if (radio.state !== 'off') { radioStart(); } }, 1500); return; }
+    radioNote('failed: ' + radio.why.slice(-3).join(', '));
     radioStopAudio(); radio.state = 'off'; renderRadio(); toast(fmt(t('radioFail'), radio.cur.name));
   }
   function radioStopAudio() {
-    clearTimeout(radio.timer);
+    clearTimeout(radio.timer); clearTimeout(radio.wait);
     if (radio.audio) { try { radio.audio.pause(); radio.audio.removeAttribute('src'); radio.audio.load(); } catch (e) { /* ignore */ } }
   }
   function radioStop() {
@@ -1586,13 +1629,13 @@
     var box = $('qp');
     if (!box) { return; }
     var on = radio.state !== 'off';
-    box.className = 'qp' + (on ? ' on' : '') + (radio.state === 'loading' ? ' loading' : '');
+    box.className = 'qp' + (on ? ' on' : '') + (radio.state === 'loading' || radio.state === 'retry' ? ' loading' : '');
     var nm = radio.cur ? radio.cur.name : '';
     var tog = $('qp-toggle');
     if (tog) {
       tog.querySelector('.qp-ic').innerHTML = on ? ICONS.pause : ICONS.play;
       tog.querySelector('.qp-nm').textContent = nm;
-      tog.querySelector('.qp-st').textContent = radio.state === 'loading' ? t('radioLoading') : on ? t('radioOn') : t('radioOff');
+      tog.querySelector('.qp-st').textContent = radio.state === 'retry' ? t('radioRetry') : radio.state === 'loading' ? t('radioLoading') : on ? t('radioOn') : t('radioOff');
     }
     var ii = $('idle-radio');
     if (ii) { ii.textContent = on ? '♪ ' + nm : ''; }
