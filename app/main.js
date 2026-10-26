@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.7.5';
+  var VERSION = '0.7.6';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -814,11 +814,12 @@
         return '<div class="ab"><div class="ab-rows" id="ab-rows"></div><div class="ab-btns">' + ub +
           '<div class="btn fx" data-act="setup">' + esc(t('calConnect')) + '</div>' +
           '<div class="btn fx" data-act="keytest">' + esc(t('keyTest')) + '</div>' +
+          (function () { var st = store('soundTest'); return '<div class="btn fx" data-act="soundtest">' + esc(t('soundTest') + (st ? ' \u00B7 ' + (st.ok ? '\u2713' : '\u2717 ' + st.result) : '')) + '</div>'; })() +
           '<div class="btn fx" data-act="refresh">' + esc(t('calRefresh')) + '</div>' +
           (calData.configured ? '<div class="btn fx" data-act="forget">' + esc(t('calForget')) + '</div>' : '') + '</div></div>';
       },
       init: function () {
-        function row(k, v, st) { return '<div class="ab-row"><i class="st st-' + st + '"></i><span class="ab-k">' + esc(k) + '</span><span class="ab-v">' + esc(v) + '</span></div>'; }
+        function row(k, v, st, cls) { return '<div class="ab-row' + (cls ? ' ' + cls : '') + '"><i class="st st-' + st + '"></i><span class="ab-k">' + esc(k) + '</span><span class="ab-v">' + esc(v) + '</span></div>'; }
         function paint(s) {
           var w = store('weather');
           var html = row(t('a_version'), VERSION + (s && s.version && s.version !== VERSION ? ' (helper ' + s.version + ')' : ''), 'ok');
@@ -836,7 +837,7 @@
             html += row(t('a_apps'), s.appsFrom === 'samsung' ? t('appsSamsung') : s.appsFrom === 'tizen' ? t('appsTizen') : '\u2014', s.appsFrom === 'samsung' ? 'ok' : 'warn');
           }
           var rl = radio.last || store('radioLast');
-          html += row(t('a_radio'), rl ? rl.name + ' \u00B7 ' + rl.result + ' \u00B7 ' + agoText(rl.at) : '\u2014', !rl ? 'warn' : /^playing/.test(rl.result) ? 'ok' : 'bad');
+          html += row(t('a_radio'), rl ? rl.name + ' \u00B7 ' + rl.result + ' \u00B7 ' + agoText(rl.at) : '\u2014', !rl ? 'warn' : /^playing/.test(rl.result) ? 'ok' : 'bad', 'ab-two');
           html += row(t('a_updates'), !updInfo ? '\u2014' : updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate') + ' \u00B7 v' + VERSION, updInfo && updInfo.newer ? 'warn' : 'ok');
           $('ab-rows').innerHTML = html;
         }
@@ -848,6 +849,7 @@
         else if (a === 'setup') { renderScreen('setup'); }
         else if (a === 'check') { checkUpdate(true, function () { if (scr.id === 'about') { renderScreen('about', 0); } toast(updInfo && updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate')); }); }
         else if (a === 'update') { runUpdate(v); }
+        else if (a === 'soundtest') { toast(t('soundPlaying')); soundTest(function () { if (scr.id === 'about') { renderScreen('about', scr.f); } }); }
         else if (a === 'keytest') {
           if (!ON_TV) { toast(t('keyTestOk')); return; }
           callService('/key?k=KEY_VOLUP', function (r1) {
@@ -1497,7 +1499,7 @@
   }
   function globeStop() { globe.on = false; clearTimeout(globe.timer); }
   /* ---------- Quick play radio: plays inside the hub, home stays on screen ---------- */
-  var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', routes: [], idx: 0, att: 0, retry: 0, timer: 0, wait: 0, why: [], last: null, played: false, drops: 0, good: 0, pos: 0, posAt: 0, ticks: 0, drops2: [] };
+  var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', routes: [], idx: 0, att: 0, retry: 0, timer: 0, wait: 0, why: [], last: null, played: false, drops: 0, good: 0, pos: 0, posAt: 0, ticks: 0, drops2: [], stage: 0, dataAt: 0, t0: 0, tPlay: 0 };
   function radioLoad() {
     getJSON('radio.json?v=' + VERSION, function (err, d) {
       if (err || !d || !d.groups) { return; }
@@ -1517,8 +1519,13 @@
      Staying on: once a station has played, a drop never turns it off. The stream ending, an error, a stall
      longer than 12 s or 20 s without progress all reconnect, starting from the address that last worked,
      waiting 2, 4, 8, 15, 30 then every 60 s, until it plays again or it is switched off.
-     The last result shows on About. */
-  var RADIO_TIMEOUT = 12000, RADIO_BACKOFF = [2000, 4000, 8000, 15000, 30000, 60000];
+     The last result shows on About.
+     0.7.6: this TV's own (Samsung) player can take longer than 12 s to start a live stream. An address that is
+     first gets 20 s, and one that is still moving forward (data in the buffer growing, header read, ready) gets up
+     to 45 s. The player sits in the page, loads eagerly and is nudged to play once it is ready.
+     A failure says how far it got and what the helper received, so the next fix never has to be a guess. */
+  var RADIO_TIMEOUT = 12000, RADIO_START = 20000, RADIO_MAX = 45000, RADIO_BACKOFF = [2000, 4000, 8000, 15000, 30000, 60000];
+  var RADIO_STAGE = ['no answer', 'connected', 'data', 'header', 'ready'];
   function radioRoutes(st) {
     var out = [];
     function add(u) {
@@ -1545,8 +1552,22 @@
   }
   function radioEl() {
     if (!radio.audio) {
-      var a = new Audio();
-      a.preload = 'none';
+      var a = document.createElement('audio');
+      a.preload = 'auto';
+      a.setAttribute('aria-hidden', 'true');
+      a.style.cssText = 'position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+      document.body.appendChild(a);
+      var up = function (n) {
+        if (radio.state === 'off') { return; }
+        if (n === 2) { radio.dataAt = Date.now(); }
+        if (n > radio.stage) { radio.stage = n; }
+        /* ready but not started by itself: ask once more */
+        if (n === 4 && a.paused) { try { var pp = a.play(); if (pp && pp.catch) { pp.catch(function () { /* the timer decides */ }); } } catch (e) { /* the timer decides */ } }
+      };
+      a.addEventListener('loadstart', function () { up(1); });
+      a.addEventListener('progress', function () { up(2); });
+      a.addEventListener('loadedmetadata', function () { up(3); });
+      a.addEventListener('canplay', function () { up(4); });
       a.addEventListener('playing', function () {
         if (radio.state === 'off') { return; }
         clearTimeout(radio.timer);
@@ -1572,14 +1593,27 @@
     }
     return radio.audio;
   }
-  function radioArm() {
+  function radioArm(from0) {
     var att = radio.att;
     clearTimeout(radio.timer);
-    var from = Date.now();
+    var from = Date.now(), first = from0 || from, st0 = radio.stage, buf0 = radioBuffered();
     radio.timer = setTimeout(function () {
+      if (att !== radio.att || radio.state === 'off') { return; }
       if (radio.played && radio.posAt > from) { if (radio.state === 'loading') { radio.state = 'playing'; renderRadio(); } return; }
-      radioFail(att, 'timeout');
-    }, RADIO_TIMEOUT);
+      /* still moving forward: give it more time, up to RADIO_MAX for this address */
+      var buf = radioBuffered();
+      if (buf > buf0 && radio.stage < 2) { radio.stage = 2; }
+      if ((radio.dataAt > from || radio.stage > st0 || buf > buf0) && Date.now() - first < RADIO_MAX) {
+        if (radio.stage >= 4 && radio.audio && radio.audio.paused) { try { var pp = radio.audio.play(); if (pp && pp.catch) { pp.catch(function () { /* timer decides */ }); } } catch (e) { /* timer decides */ } }
+        radioArm(first);
+        return;
+      }
+      radioFail(att, 'timeout (' + RADIO_STAGE[radio.stage] + ')');
+    }, radio.played || from0 ? RADIO_TIMEOUT : RADIO_START);
+  }
+  /* seconds of audio the player holds; grows while data arrives even when no 'progress' event fires */
+  function radioBuffered() {
+    try { var b = radio.audio && radio.audio.buffered; return b && b.length ? b.end(b.length - 1) : 0; } catch (e) { return 0; }
   }
   /* watchdog: playing but the clock has not moved for 20 s = silently stuck */
   setInterval(function () {
@@ -1590,7 +1624,7 @@
     if (!radio.cur) { return; }
     clearTimeout(radio.wait);
     radio.routes = radioRoutes(radio.cur); radio.idx = 0; radio.retry = 0; radio.why = [];
-    radio.played = false; radio.drops = 0; radio.good = 0; radio.drops2 = []; radio.ticks = 0;
+    radio.played = false; radio.drops = 0; radio.good = 0; radio.drops2 = []; radio.ticks = 0; radio.tPlay = Date.now();
     radio.state = 'loading'; renderRadio();
     radioStart();
   }
@@ -1599,9 +1633,11 @@
     if (!r) { radioFail(radio.att, 'no address'); return; }
     radio.att = (radio.att || 0) + 1;
     var att = radio.att;
+    radio.stage = 0; radio.dataAt = 0; radio.t0 = Date.now();
     radioArm();
     try {
       a.src = r.src;
+      a.load();
       var p = a.play();
       if (p && p.catch) { p.catch(function (e) { radioFail(att, 'play ' + (e && e.name ? e.name : 'refused')); }); }
     } catch (e) { radioFail(att, 'play error'); }
@@ -1629,9 +1665,22 @@
       return;
     }
     if (radio.idx + 1 < radio.routes.length) { radio.idx++; radioStart(); return; }
-    if (radio.retry < 1) { radio.retry++; radio.idx = 0; clearTimeout(radio.wait); radio.wait = setTimeout(function () { if (radio.state !== 'off') { radioStart(); } }, 1500); return; }
-    radioNote('failed: ' + radio.why.slice(-3).join(', '));
+    if (radio.retry < 1 && Date.now() - radio.tPlay < 60000) { radio.retry++; radio.idx = 0; clearTimeout(radio.wait); radio.wait = setTimeout(function () { if (radio.state !== 'off') { radioStart(); } }, 1500); return; }
+    var whys = radio.why.filter(function (w, i, l) { return l.indexOf(w) === i; }).slice(-4).join(', '), since = radio.tPlay;
+    radioNote('failed: ' + whys);
     radioStopAudio(); radio.state = 'off'; renderRadio(); toast(fmt(t('radioFail'), radio.cur.name));
+    /* add what the helper actually received, so About tells "no data reached the TV" from "data came, player would not start" */
+    if (ON_TV) {
+      var nm = radio.cur.name;
+      callService('/radio/seen', function (s) {
+        var list = (s && s.seen || []).filter(function (e) { return e.at >= since - 1000; });
+        if (!list.length) { return; }
+        var e = list[list.length - 1];
+        var kb = Math.round((e.bytes || 0) / 1024);
+        var ln = 'helper got ' + kb + ' KB' + (e.code && e.code !== 200 ? ' (answer ' + e.code + ')' : '') + (e.end ? ', ' + e.end : '');
+        if (radio.state === 'off' && radio.last && radio.last.name === nm) { radioNote('failed: ' + ln + ' \u00B7 ' + whys); }
+      }, 3000);
+    }
   }
   function radioStopAudio() {
     clearTimeout(radio.timer); clearTimeout(radio.wait);
@@ -1643,6 +1692,40 @@
     renderRadio();
   }
   function radioToggle() { if (radio.state === 'off') { radioPlay(); } else { radioStop(); } }
+  /* Sound test (About): a 2-second chime stored in the hub itself, played the same way as a station.
+     Heard = the TV's player works and any radio problem is in the streams; silent = the player itself. */
+  function soundTest(done) {
+    radioStop();
+    var a = document.createElement('audio'), fin = false, stage = 0, went = false, tm = 0;
+    a.preload = 'auto';
+    a.style.cssText = 'position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.appendChild(a);
+    function end(ok, why) {
+      if (fin) { return; }
+      fin = true; clearTimeout(tm);
+      try { a.pause(); a.removeAttribute('src'); a.load(); } catch (e) { /* ignore */ }
+      if (a.parentNode) { a.parentNode.removeChild(a); }
+      var r = { ok: ok, result: ok ? 'played' : why, at: Date.now() };
+      store('soundTest', r);
+      toast(ok ? t('soundOk') : fmt(t('soundFail'), why));
+      if (done) { done(r); }
+    }
+    a.addEventListener('loadstart', function () { stage = Math.max(stage, 1); });
+    a.addEventListener('progress', function () { stage = Math.max(stage, 2); });
+    a.addEventListener('loadedmetadata', function () { stage = Math.max(stage, 3); });
+    a.addEventListener('canplay', function () { stage = Math.max(stage, 4); });
+    a.addEventListener('playing', function () { went = true; });
+    a.addEventListener('timeupdate', function () { if (a.currentTime > 0.5) { went = true; } });
+    a.addEventListener('ended', function () { end(true); });
+    a.addEventListener('error', function () { end(false, 'error ' + (a.error ? a.error.code : '?')); });
+    tm = setTimeout(function () { end(went, went ? '' : 'timeout (' + RADIO_STAGE[stage] + ')'); }, 15000);
+    try {
+      a.src = 'sound-test.mp3?v=' + VERSION;
+      a.load();
+      var p = a.play();
+      if (p && p.catch) { p.catch(function (e) { end(false, 'play ' + (e && e.name ? e.name : 'refused')); }); }
+    } catch (e) { end(false, 'play error'); }
+  }
   function renderRadio() {
     var box = $('qp');
     if (!box) { return; }

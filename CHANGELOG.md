@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.6 — 2026-10-26
+- Quick play starts on this TV. Every station was failing with "timeout": the TV's own Samsung player takes longer to start a live stream than the 12 s the hub allowed. Each address now gets 20 s, and up to 45 s while it is visibly moving forward (data arriving in the buffer, header read, ready). The player sits in the page, loads straight away and is asked to play again once it is ready.
+- The hub helper now passes streams on the way radio servers do (no chunked encoding, no keep-alive), which Samsung's player handles best, and gives up on a station that does not answer within 10 s.
+- If a station still does not start, About › Quick play says how far it got and what the helper received (e.g. "helper got 0 KB, no answer in 10 s · direct timeout (connected)"), on up to two lines, so the next fix is never a guess.
+- About › Sound test plays a 2-second chime stored in the hub: heard = the TV's player works; silent = the problem is the player, not the stations. The button shows the last result.
+
 ## 0.7.5 — 2026-10-25
 - iPhone card: the Join home Wi-Fi side now shows the network name and the password in large type under a bigger QR code, so any guest can join: scan with any phone camera (iPhone or Android) or type it in. The card is wider to fit. The password is still kept only on the TV (Menu › Calendar & Wi-Fi).
 

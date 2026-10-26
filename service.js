@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.7.5';
+var VERSION = '0.7.6';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
@@ -696,6 +696,9 @@ var RADIO_ROOTS = [
    hub notices and reconnects instead of sitting silent. ---------- */
 var netm = require('net'), tlsm = require('tls'), urlm = require('url');
 var radioTls = {};   /* host -> 'roots' once the TV's own list has failed for it */
+/* What the helper actually passed on, newest last (shown on About when a station does not start). */
+var radioSeen = [];
+function radioSeenAdd(e) { radioSeen.push(e); if (radioSeen.length > 6) { radioSeen.shift(); } return e; }
 function radioCertErr(e) { var m = String((e && (e.code || e.message)) || ''); return /CERT|ISSUER|SELF_SIGNED|UNABLE_TO|verify|certificate/i.test(m); }
 function radioRelay(u, res, depth, useRoots) {
   var p = urlm.parse(String(u || ''));
@@ -704,19 +707,22 @@ function radioRelay(u, res, depth, useRoots) {
   if (secure && radioTls[p.hostname] === 'roots') { useRoots = true; }
   var opts = { host: p.hostname, port: port, servername: p.hostname };
   if (useRoots) { opts.ca = RADIO_ROOTS; }
+  var seen = res.gwSeen || (res.gwSeen = radioSeenAdd({ host: p.hostname, at: Date.now(), code: 0, type: '', bytes: 0, firstMs: 0, end: 'connecting' }));
+  seen.host = p.hostname; seen.end = 'connecting';
   var sock = secure ? tlsm.connect(opts) : netm.connect({ host: p.hostname, port: port });
   var chunks = [], got = 0, passing = false, finished = false;
-  function fail(code) { if (finished) { return; } finished = true; try { sock.destroy(); } catch (e) { /* ignore */ } if (!res.headersSent) { res.statusCode = code; res.end(); } else { try { res.end(); } catch (e2) { /* ignore */ } } }
+  function fail(code, why) { if (why && /^(connecting|no reply|passing)$/.test(seen.end)) { seen.end = why; } if (finished) { return; } finished = true; try { sock.destroy(); } catch (e) { /* ignore */ } if (!res.headersSent) { res.statusCode = code; res.end(); } else { try { res.end(); } catch (e2) { /* ignore */ } } }
   try { sock.setKeepAlive(true, 10000); } catch (e) { /* ignore */ }
-  sock.setTimeout(15000, function () { fail(504); });
+  sock.setTimeout(10000, function () { fail(504, passing ? 'went quiet' : 'no answer in 10 s'); });
   sock.on(secure ? 'secureConnect' : 'connect', function () {
+    seen.end = 'no reply';
     sock.write('GET ' + path + ' HTTP/1.0\r\nHost: ' + p.host + '\r\nUser-Agent: GreenwoodHub/' + VERSION + '\r\nAccept: */*\r\nIcy-MetaData: 0\r\nConnection: close\r\n\r\n');
   });
   sock.on('data', function (d) {
-    if (passing) { return; }
+    if (passing) { seen.bytes += d.length; return; }
     chunks.push(d); got += d.length;
     var buf = Buffer.concat(chunks), txt = buf.toString('binary'), end = txt.indexOf('\r\n\r\n');
-    if (end < 0) { if (got > 16384) { fail(502); } return; }
+    if (end < 0) { if (got > 16384) { fail(502, 'bad reply'); } return; }
     var head = txt.slice(0, end), st = /^(?:HTTP\/1\.[01]|ICY) (\d{3})/.exec(head), code = st ? +st[1] : 0;
     var hv = function (n) { var m = new RegExp('^' + n + ':\\s*(.+)$', 'im').exec(head); return m ? m[1].trim() : ''; };
     if (code >= 300 && code < 400 && hv('location')) {
@@ -724,14 +730,20 @@ function radioRelay(u, res, depth, useRoots) {
       radioRelay(urlm.resolve(u, hv('location')), res, depth + 1);
       return;
     }
-    if (code !== 200) { fail(502); return; }
-    passing = true;
-    sock.setTimeout(20000, function () { fail(504); });   /* stream went quiet: close so the hub reconnects */
+    seen.code = code;
+    if (code !== 200) { fail(502, 'station answered ' + code); return; }
+    passing = true; seen.end = 'passing'; seen.firstMs = Date.now() - seen.at;
+    sock.setTimeout(20000, function () { fail(504, 'went quiet'); });   /* stream went quiet: close so the hub reconnects */
     var ct = (hv('content-type') || 'audio/mpeg').split(';')[0].trim().toLowerCase();
     if (ct === 'audio/aacp' || ct === 'audio/x-aac') { ct = 'audio/aac'; }
     if (!/^audio\/|^application\/ogg/.test(ct)) { ct = 'audio/mpeg'; }
-    res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'no-cache' });
-    res.write(buf.slice(end + 4));
+    seen.type = ct;
+    /* Answer like a radio server does: no chunked encoding, no keep-alive, the audio just flows until the end.
+       Samsung's own media player (not Chromium's) is happiest with that. */
+    res.useChunkedEncodingByDefault = false; res.chunkedEncoding = false; res.shouldKeepAlive = false;
+    res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'no-cache', 'Connection': 'close', 'Accept-Ranges': 'none' });
+    var rest = buf.slice(end + 4); seen.bytes += rest.length;
+    res.write(rest);
     sock.pipe(res);
   });
   sock.on('error', function (e) {
@@ -740,10 +752,10 @@ function radioRelay(u, res, depth, useRoots) {
       radioRelay(u, res, depth, true);
       return;
     }
-    fail(502);
+    fail(502, radioCertErr(e) ? 'certificate' : String((e && e.code) || 'network error'));
   });
-  sock.on('end', function () { if (!passing) { fail(502); } else { fail(200); } });
-  res.on('close', function () { finished = true; try { sock.destroy(); } catch (e) { /* ignore */ } });
+  sock.on('end', function () { if (!passing) { fail(502, 'closed before audio'); } else { fail(200, 'station ended'); } });
+  res.on('close', function () { if (seen.end === 'passing') { seen.end = 'hub stopped'; } finished = true; try { sock.destroy(); } catch (e) { /* ignore */ } });
 }
 
 /* ---------- Wi-Fi QR for the iPhone card ---------- */
@@ -1184,6 +1196,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === 'GET' && url === '/info') { info(function (o) { res.end(JSON.stringify(o)); }); return; }
   var rq = /^\/radio\?u=(.+)$/.exec(url);
   if (req.method === 'GET' && rq) { var ru = ''; try { ru = decodeURIComponent(rq[1]); } catch (e) { ru = ''; } radioRelay(ru, res, 0); return; }
+  if (req.method === 'GET' && url === '/radio/seen') { res.end(JSON.stringify({ ok: true, now: Date.now(), seen: radioSeen })); return; }
   if (req.method === 'GET' && url === '/wifi') { wifiInfo(function (o) { res.end(JSON.stringify(o)); }); return; }
   var cm = /^\/calendar(\?force=1)?$/.exec(url);
   if (req.method === 'GET' && cm) { readCalendar(!!cm[1], function (o) { res.end(JSON.stringify(o)); }); return; }

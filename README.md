@@ -17,6 +17,7 @@ Additive only: Samsung's Home bar, apps and settings stay exactly as they are.
 | `app/i18n.js` | Texts in English, Latviešu, Français |
 | `app/vendor/` | QR code generator (MIT, see CREDITS.md) |
 | `app/radio.json` | Quick play stations (official public streams, fallback URLs) |
+| `app/sound-test.mp3` | 2-second chime for About › Sound test (made for the hub) |
 | `service.js` | Local helper on 127.0.0.1:8095: app list + icons, app launch (allowlist), remote keys (HDMI, Menu, Source, Home), calendar, sleep timer, updates, /log, /stats (storage, memory, processor), /info (model, system, screen, Wi-Fi name), /wifi (QR text), /radio (Quick play stream relay) |
 | `.github/workflows/release.yml` | Creates tag + release from `package.json` version after an upload |
 | `docs/tizenbrew-review.md` | Code review of TizenBrew + installer |
