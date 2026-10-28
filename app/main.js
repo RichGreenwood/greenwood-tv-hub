@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.7.8';
+  var VERSION = '0.7.9';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -1078,7 +1078,7 @@
     if (im) {
       im.innerHTML = ['gold', 'silver'].map(function (k) {
         var o = d[k] || {};
-        return o.g ? '<span class="im-i ' + k + '">' + ingot(k) + '<span class="im-k">' + esc(t(k === 'gold' ? 'mtGold' : 'mtSilver')) + '</span><span class="im-p">\u20AC' + money(o.g, o.g >= 10 ? 2 : 3) + '<span class="mt-u">/g</span></span></span>' : '';
+        return o.g ? '<span class="im-i ' + k + '">' + ingot(k) + '<span class="im-p">\u20AC' + money(o.g, o.g >= 10 ? 2 : 3) + '<span class="mt-u">/g</span></span></span>' : '';
       }).join('');
     }
     var old = Date.now() - (d.at || 0) > 30 * 60000;

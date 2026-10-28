@@ -714,3 +714,9 @@ html, body { background: #011815; }
 .im-k { display: inline-block; vertical-align: middle; font-size: 14px; font-weight: 700; letter-spacing: 3px; color: var(--sage); margin-right: 12px; }
 .im-i.gold .im-k { color: var(--gold); }
 .im-p { display: inline-block; vertical-align: middle; font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* 0.7.9 Idle prices: no labels, everything 25% bigger */
+.im-i { margin: 0 36px; }
+.im-i .mt-ig { width: 58px; height: 39px; margin-right: 16px; }
+.im-p { font-size: 38px; }
+.im-p .mt-u { font-size: 20px; }

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.9 — 2026-10-28
+- Idle screen prices: labels removed (just the gold and silver bar with the price per gram), 25% bigger.
+
 ## 0.7.8 — 2026-10-28
 - Idle screen: gold and silver price per gram under the watch (bar icon, label, € per gram only; no change or chart). Hidden in Night view.
 
