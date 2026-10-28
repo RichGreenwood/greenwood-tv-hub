@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.7 — 2026-10-28
+- Home: gold and silver under the week strip, in euros per gram of pure metal (gold 24K, silver 999), with a gold and a silver bar icon, today's change (▲/▼ in € and %) and a 30-day line. Refreshes every minute; dims if the prices are more than 30 minutes old.
+- The hub helper reads the prices through a new local /metals endpoint (cached 55 s): live spot from xaus.com (fallback Yahoo Finance COMEX futures, then gold-api.com), EUR rate from Yahoo (fallback Frankfurter/ECB), today's change and 30 days from Yahoo daily closes. Public market data only, no account or key.
+
 ## 0.7.6 — 2026-10-26
 - Quick play starts on this TV. Every station was failing with "timeout": the TV's own Samsung player takes longer to start a live stream than the 12 s the hub allowed. Each address now gets 20 s, and up to 45 s while it is visibly moving forward (data arriving in the buffer, header read, ready). The player sits in the page, loads straight away and is asked to play again once it is ready.
 - The hub helper now passes streams on the way radio servers do (no chunked encoding, no keep-alive), which Samsung's player handles best, and gives up on a station that does not answer within 10 s.

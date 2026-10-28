@@ -683,3 +683,24 @@ html, body { background: #011815; }
 .cw-pw { color: var(--gold); letter-spacing: 1px; word-break: break-all; }
 .cw-note { margin-top: 18px; }
 .cw-rows .cw-ssid { margin-top: 0; font-size: 28px; line-height: 36px; }
+
+/* 0.7.7 Gold and silver under the week strip (EUR per gram) */
+.mt { margin-top: 26px; width: 520px; border-top: 1px solid rgba(235,180,44,.22); }
+.mt[hidden] { display: none; }
+.mt.stale { opacity: .55; }
+.mt-row { display: flex; align-items: center; height: 60px; border-bottom: 1px solid rgba(235,180,44,.12); }
+.mt-ig { width: 52px; height: 35px; flex: none; margin-right: 16px; }
+.mt-a { width: 170px; flex: none; }
+.mt-k { font-size: 13px; font-weight: 700; letter-spacing: 3px; color: var(--sage); line-height: 16px; }
+.mt-row.gold .mt-k { color: var(--gold); }
+.mt-p { font-size: 27px; font-weight: 700; line-height: 34px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mt-u { font-size: 16px; font-weight: 600; color: var(--sage); margin-left: 2px; }
+.mt-c { width: 128px; flex: none; text-align: right; margin-right: 18px; }
+.mt-cv { font-size: 19px; font-weight: 700; line-height: 24px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mt-cp { font-size: 14px; line-height: 18px; color: var(--sage); white-space: nowrap; }
+.mt-c.up .mt-cv { color: #7CC4A4; }
+.mt-c.dn .mt-cv { color: #E8907A; }
+.mt-s { flex: none; width: 132px; position: relative; }
+.mt-sp { display: block; width: 132px; height: 40px; }
+.mt-sp.none { height: 40px; }
+.mt-sk { position: absolute; right: 0; bottom: -13px; font-size: 11px; letter-spacing: 1px; color: var(--sage); opacity: .8; }

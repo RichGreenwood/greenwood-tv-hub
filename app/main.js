@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.7.6';
+  var VERSION = '0.7.7';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -1047,6 +1047,58 @@
     }).join('') : '';
   }
   /* Week strip: Monday to Sunday of the current week; today lights up; a dot marks days with meetings. */
+
+  /* ---------- Gold and silver under the week strip: EUR per gram, today's change, last 30 days ----------
+     The helper on the TV reads the prices (see service.js /metals); the hub asks every minute. */
+  var metalsData = store('metals');
+  function ingot(kind) {
+    var g = kind === 'gold' ? ['#FCE7A2', '#E8B84A', '#B8862A', '#8E6420'] : ['#FFFFFF', '#D9DEE2', '#A9B1B8', '#7E8790'];
+    var id = 'ig-' + kind;
+    return '<svg viewBox="0 0 48 32" class="mt-ig"><defs><linearGradient id="' + id + 't" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + g[0] + '"/><stop offset="1" stop-color="' + g[1] + '"/></linearGradient>' +
+      '<linearGradient id="' + id + 'f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + g[1] + '"/><stop offset="1" stop-color="' + g[2] + '"/></linearGradient></defs>' +
+      '<path d="M11 6h26l7 10H4z" fill="url(#' + id + 't)"/><path d="M4 16h40l-3 12H7z" fill="url(#' + id + 'f)"/><path d="M44 16l-3 12" stroke="' + g[3] + '" stroke-width="1.2" fill="none"/>' +
+      '<path d="M13 9h12" stroke="#fff" stroke-opacity=".55" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  }
+  function spark(vals, kind) {
+    if (!vals || vals.length < 2) { return '<div class="mt-sp none"></div>'; }
+    var w = 132, h = 40, mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals), r = mx - mn || 1;
+    var pts = vals.map(function (v, i) { return [(i / (vals.length - 1) * (w - 6) + 3).toFixed(1), (h - 4 - (v - mn) / r * (h - 8)).toFixed(1)]; });
+    var line = pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' ');
+    var col = kind === 'gold' ? '#EBB42C' : '#C9D1D6', last = pts[pts.length - 1];
+    return '<svg class="mt-sp" viewBox="0 0 ' + w + ' ' + h + '"><polygon points="3,' + h + ' ' + line + ' ' + last[0] + ',' + h + '" fill="' + col + '" fill-opacity=".12"/>' +
+      '<polyline points="' + line + '" fill="none" stroke="' + col + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="3.2" fill="' + col + '"/></svg>';
+  }
+  function money(v, dp) { return v.toFixed(dp).replace('.', t('decimal') || '.'); }
+  function renderMetals() {
+    var box = $('mt'), d = metalsData;
+    if (!box) { return; }
+    if (!d || !d.gold || !d.gold.g) { box.hidden = true; return; }
+    var old = Date.now() - (d.at || 0) > 30 * 60000;
+    box.hidden = false;
+    box.className = 'mt' + (old || d.stale ? ' stale' : '');
+    box.innerHTML = ['gold', 'silver'].map(function (k) {
+      var o = d[k] || {}, dp = o.g >= 10 ? 2 : 3, up = (o.pct || 0) >= 0, has = typeof o.pct === 'number' && isFinite(o.pct);
+      var hist = (o.hist || []).slice(-29).concat(o.g ? [o.g] : []);
+      return '<div class="mt-row ' + k + '">' + ingot(k) +
+        '<div class="mt-a"><div class="mt-k">' + esc(t(k === 'gold' ? 'mtGold' : 'mtSilver')) + '</div><div class="mt-p">€' + (o.g ? money(o.g, dp) : '—') + '<span class="mt-u">/g</span></div></div>' +
+        '<div class="mt-c ' + (has ? (up ? 'up' : 'dn') : '') + '">' + (has ? '<div class="mt-cv">' + (up ? '▲ +' : '▼ −') + money(Math.abs(o.chg || 0), dp) + '</div><div class="mt-cp">' + (up ? '+' : '−') + money(Math.abs(o.pct), 2) + '% ' + esc(t('mtToday')) + '</div>' : '') + '</div>' +
+        '<div class="mt-s">' + spark(hist, k) + '<div class="mt-sk">' + esc(t('mt30')) + '</div></div></div>';
+    }).join('');
+  }
+  function loadMetals() {
+    if (!ON_TV) {
+      var gh = [], sh = [], i;
+      for (i = 0; i < 29; i++) { gh.push(108 + Math.sin(i / 4) * 1.6 + i * 0.12); sh.push(1.30 + Math.cos(i / 5) * 0.03 + i * 0.001); }
+      metalsData = { at: Date.now(), gold: { g: 112.46, pct: 0.62, chg: 0.69, hist: gh }, silver: { g: 1.342, pct: -0.41, chg: -0.006, hist: sh } };
+      renderMetals(); return;
+    }
+    callService('/metals', function (r) {
+      if (r && r.gold && r.gold.g) { metalsData = r; store('metals', r); }
+      renderMetals();
+    }, 30000);
+  }
+
   function renderWeek() {
     var now = new Date();
     /* Sunday: the strip starts today and runs to Saturday; Monday to Saturday: the week starts on Monday */
@@ -1995,6 +2047,8 @@
     setTimeout(function () { checkUpdate(false); }, 15000);
     setInterval(function () { if (!document.hidden) { checkUpdate(false); } }, 6 * 3600000);
     radioLoad();
+    loadMetals();
+    setInterval(function () { if (!document.hidden) { loadMetals(); } }, 60000);
     getJSON('data/namedays-lv.json?v=' + VERSION, function (err, d) { if (!err && d) { nameDays = d; showNameDays(); } });
     armIdle();
     document.addEventListener('keydown', onKey);

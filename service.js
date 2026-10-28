@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.7.6';
+var VERSION = '0.7.7';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
@@ -758,6 +758,147 @@ function radioRelay(u, res, depth, useRoots) {
   res.on('close', function () { if (seen.end === 'passing') { seen.end = 'hub stopped'; } finished = true; try { sock.destroy(); } catch (e) { /* ignore */ } });
 }
 
+/* ---------- Gold and silver for the home screen (EUR per gram, pure metal) ----------
+   Read-only public market data, no account and no key. Sources, each with a fallback:
+     live price   xaus.com spot (USD/oz)  ->  Yahoo Finance COMEX futures GC=F / SI=F  ->  gold-api.com
+     EUR rate     Yahoo EURUSD=X          ->  Frankfurter (ECB)
+     30 days      Yahoo daily closes GC=F / SI=F / EURUSD=X (cached 6 h)
+     today        Yahoo change against the previous close; without it, against the first price seen after midnight
+   Cached for 55 s, so the hub can ask every minute. Certificates are always checked (TV list, then RADIO_ROOTS). */
+var OZ_G = 31.1034768;
+var metals = { at: 0, busy: false, waits: [], data: null, hist: null, histAt: 0, mid: null, err: [] };
+function getJsonX(url, cb, roots, depth) {
+  var done = false;
+  function finish(err, data) { if (!done) { done = true; cb(err, data); } }
+  try {
+    var opts = urlm.parse(url);
+    opts.headers = { 'User-Agent': 'Mozilla/5.0 (SMART-TV; Tizen 5.0) GreenwoodHub/' + VERSION, 'Accept': 'application/json' };
+    if (roots) { opts.ca = RADIO_ROOTS; opts.agent = false; }
+    var req = https.get(opts, function (res) {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && (depth || 0) < 3) {
+        res.resume(); getJsonX(urlm.resolve(url, res.headers.location), finish, roots, (depth || 0) + 1); return;
+      }
+      if (res.statusCode !== 200) { res.resume(); finish('HTTP ' + res.statusCode); return; }
+      var b = '';
+      res.on('data', function (c) { b += c; if (b.length > 1024 * 1024) { req.abort(); finish('too large'); } });
+      res.on('end', function () { try { finish(null, JSON.parse(b)); } catch (e) { finish('bad json'); } });
+    });
+    req.setTimeout(12000, function () { req.abort(); finish('timeout'); });
+    req.on('error', function (e) {
+      if (!roots && radioCertErr(e)) { done = true; getJsonX(url, cb, true, depth); return; }
+      finish((e && e.code) || 'network');
+    });
+  } catch (e) { finish('request error'); }
+}
+function num(v) { v = +v; return isFinite(v) && v > 0 ? v : 0; }
+function yahoo(sym, range, cb) {
+  getJsonX('https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?range=' + range + '&interval=1d', function (err, d) {
+    var r = !err && d && d.chart && d.chart.result && d.chart.result[0];
+    if (!r) { cb(err || 'no data'); return; }
+    var m = r.meta || {}, ts = r.timestamp || [], q = (r.indicators && r.indicators.quote && r.indicators.quote[0]) || {}, cl = q.close || [];
+    var days = [];
+    for (var i = 0; i < ts.length; i++) { if (num(cl[i])) { days.push({ t: ts[i] * 1000, v: +cl[i] }); } }
+    cb(null, { price: num(m.regularMarketPrice), prev: num(m.chartPreviousClose) || num(m.previousClose), days: days });
+  });
+}
+function rigaDay(ms) {
+  /* date in Riga (EET/EEST: last Sunday of March / October at 01:00 UTC) */
+  var d = new Date(ms), y = d.getUTCFullYear();
+  function lastSun(mo) { var x = new Date(Date.UTC(y, mo + 1, 0)); return Date.UTC(y, mo, x.getUTCDate() - x.getUTCDay(), 1); }
+  var off = (ms >= lastSun(2) && ms < lastSun(9)) ? 3 : 2;
+  return new Date(ms + off * 3600000).toISOString().slice(0, 10);
+}
+function metalsLoad(cb) {
+  var out = { gold: {}, silver: {}, src: [] }, errs = [], left = 4, ysym = { gold: 'GC=F', silver: 'SI=F' }, yq = {};
+  function step() {
+    if (--left > 0) { return; }
+    var fx = out.fx;
+    if (!fx) { errs.push('no EUR rate'); }
+    ['gold', 'silver'].forEach(function (k) {
+      var usd = out[k].usd || (yq[k] && yq[k].price) || out[k].alt || 0, o = out[k];
+      o.g = fx && usd ? usd / OZ_G / fx : 0;
+      var y = yq[k];
+      if (y && y.price && y.prev) { o.pct = (y.price / y.prev - 1) * 100; o.base = 'prev close'; }
+      if (y && y.days.length && metals.histFx) {
+        o.hist = y.days.map(function (p) { var f = metals.histFx[rigaDay(p.t)] || fx; return f ? Math.round(p.v / OZ_G / f * 100) / 100 : 0; }).filter(function (v) { return v > 0; }).slice(-30);
+      }
+      delete o.usd; delete o.alt;
+    });
+    /* first price after midnight, as a fallback for "today" */
+    var day = rigaDay(Date.now());
+    if (!metals.mid || metals.mid.day !== day) { metals.mid = { day: day, gold: out.gold.g, silver: out.silver.g }; }
+    ['gold', 'silver'].forEach(function (k) {
+      var o = out[k];
+      if (o.pct === undefined && metals.mid[k] && o.g) { o.pct = (o.g / metals.mid[k] - 1) * 100; o.base = 'since midnight'; }
+      if (o.pct !== undefined && o.g) { o.chg = o.g - o.g / (1 + o.pct / 100); }
+    });
+    out.ok = !!(out.gold.g && out.silver.g);
+    out.at = Date.now(); out.errors = errs;
+    cb(out);
+  }
+  /* live spot */
+  getJsonX('https://xaus.com/api/v1/spot', function (err, d) {
+    if (!err && d && num(d.spot_usd_oz)) { out.gold.usd = num(d.spot_usd_oz); out.silver.usd = num(d.silver_usd_oz); out.src.push('xaus.com'); }
+    else { errs.push('xaus ' + (err || 'no price')); }
+    if (out.gold.usd && out.silver.usd) { step(); return; }
+    getJsonX('https://api.gold-api.com/price/XAU', function (e1, a) {
+      if (!e1 && a) { out.gold.alt = out.gold.alt || num(a.price); }
+      getJsonX('https://api.gold-api.com/price/XAG', function (e2, b) {
+        if (!e2 && b) { out.silver.alt = out.silver.alt || num(b.price); }
+        if (e1 || e2) { errs.push('gold-api ' + (e1 || e2)); } else { out.src.push('gold-api.com'); }
+        step();
+      });
+    });
+  });
+  /* Yahoo: today's change and 30 days */
+  var range = !metals.histAt || Date.now() - metals.histAt > 6 * 3600000 ? '1mo' : '5d';
+  ['gold', 'silver'].forEach(function (k) {
+    yahoo(ysym[k], range, function (err, y) {
+      if (err) { errs.push('yahoo ' + ysym[k] + ' ' + err); }
+      else {
+        if (range === '1mo') { (metals.histY = metals.histY || {})[k] = y.days; }
+        else if (metals.histY && metals.histY[k]) {
+          /* refresh the newest days, keep the older ones */
+          var old = metals.histY[k].filter(function (p) { return rigaDay(p.t) < rigaDay(y.days.length ? y.days[0].t : Date.now()); });
+          metals.histY[k] = old.concat(y.days).slice(-30);
+        }
+        y.days = (metals.histY && metals.histY[k]) || y.days;
+        yq[k] = y; out.src.push('Yahoo ' + ysym[k]);
+      }
+      step();
+    });
+  });
+  /* EUR rate (+ history for the 30-day line) */
+  yahoo('EURUSD=X', range, function (err, y) {
+    if (!err && y.price) {
+      out.fx = y.price;
+      if (range === '1mo') { metals.histFx = {}; metals.histAt = Date.now(); }
+      metals.histFx = metals.histFx || {};
+      y.days.forEach(function (p) { metals.histFx[rigaDay(p.t)] = p.v; });
+      step(); return;
+    }
+    errs.push('yahoo EURUSD ' + (err || 'no price'));
+    getJsonX('https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD', function (e2, f) {
+      if (!e2 && f && f.rates && num(f.rates.USD)) { out.fx = num(f.rates.USD); out.src.push('Frankfurter'); }
+      else { errs.push('frankfurter ' + (e2 || 'no rate')); }
+      step();
+    });
+  });
+}
+function metalsGet(cb) {
+  if (metals.data && Date.now() - metals.at < 55000) { cb(metals.data); return; }
+  metals.waits.push(cb);
+  if (metals.busy) { return; }
+  metals.busy = true;
+  metalsLoad(function (out) {
+    metals.busy = false;
+    if (out.ok || !metals.data) { metals.data = out; metals.at = Date.now(); }
+    else { metals.data.stale = true; metals.data.errors = out.errors; metals.at = Date.now() - 30000; }
+    var ws = metals.waits; metals.waits = [];
+    ws.forEach(function (w) { w(metals.data); });
+  });
+}
+
 /* ---------- Wi-Fi QR for the iPhone card ---------- */
 function wifiEsc(v) { return String(v).replace(/([\\;,:"])/g, '\\$1'); }
 function wifiSsid(cb) {
@@ -1197,6 +1338,7 @@ var server = http.createServer(function (req, res) {
   var rq = /^\/radio\?u=(.+)$/.exec(url);
   if (req.method === 'GET' && rq) { var ru = ''; try { ru = decodeURIComponent(rq[1]); } catch (e) { ru = ''; } radioRelay(ru, res, 0); return; }
   if (req.method === 'GET' && url === '/radio/seen') { res.end(JSON.stringify({ ok: true, now: Date.now(), seen: radioSeen })); return; }
+  if (req.method === 'GET' && url === '/metals') { metalsGet(function (o) { res.end(JSON.stringify(o)); }); return; }
   if (req.method === 'GET' && url === '/wifi') { wifiInfo(function (o) { res.end(JSON.stringify(o)); }); return; }
   var cm = /^\/calendar(\?force=1)?$/.exec(url);
   if (req.method === 'GET' && cm) { readCalendar(!!cm[1], function (o) { res.end(JSON.stringify(o)); }); return; }
