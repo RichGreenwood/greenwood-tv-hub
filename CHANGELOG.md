@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.8 — 2026-10-28
+- Idle screen: gold and silver price per gram under the watch (bar icon, label, € per gram only; no change or chart). Hidden in Night view.
+
 ## 0.7.7 — 2026-10-28
 - Home: gold and silver under the week strip, in euros per gram of pure metal (gold 24K, silver 999), with a gold and a silver bar icon, today's change (▲/▼ in € and %) and a 30-day line. Refreshes every minute; dims if the prices are more than 30 minutes old.
 - The hub helper reads the prices through a new local /metals endpoint (cached 55 s): live spot from xaus.com (fallback Yahoo Finance COMEX futures, then gold-api.com), EUR rate from Yahoo (fallback Frankfurter/ECB), today's change and 30 days from Yahoo daily closes. Public market data only, no account or key.

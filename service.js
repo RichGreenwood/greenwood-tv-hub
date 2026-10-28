@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.7.7';
+var VERSION = '0.7.8';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
