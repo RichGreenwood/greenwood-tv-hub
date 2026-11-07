@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.10 — 2026-11-07
+Stability release: nothing looks different, but the hub should no longer slow down, freeze or lose its helper after days on screen.
+- TV info: the processor/memory check kept running after Back, one more loop for every visit, even in idle and night view. It now stops when you leave.
+- Daylight: leaving the screen before the globe had loaded switched the globe on invisibly, redrawing every 0.2 s until the next visit. It now stays off. It also stops when another app opens.
+- Clock: one error in the minute, hour or day update stopped the watch, date, agenda and night view for good. The next tick is now set first and an error is skipped.
+- Remote keys work even if a later start-up step fails. If theme.json cannot be read at power-on, the hub tries again (5, 10, 20, 30 s …) instead of staying blank.
+- Every request now has a time limit. An error in a screen's update no longer runs that update twice or doubles its timer. Weather keeps one refresh timer only.
+- Screens: late answers (key test, calendar refresh, updates, Calendar & Wi-Fi setup) no longer redraw a screen you have already left or start loops behind it. Switching screens always cleans up the old one.
+- Quick play: a station that plays a moment and drops now backs off (2, 4, 8, 15, 30, 60 s) instead of reconnecting every few seconds (23 times a minute in the test). The equaliser stops animating behind the idle screen.
+- Helper: calendar refresh took seconds and blocked everything else (radio, keys, apps) every 15 minutes. It now takes milliseconds (2.5 s → 0.02 s in the test, same events).
+- Helper: one unexpected error can no longer stop it (safety net). A bad station address and a malformed setup message, which both crashed it, are rejected cleanly.
+- Helper: the app list is read once at a time instead of once per icon. Remote keys give up after 6 s when the TV has already allowed them, instead of 30 s (the queue no longer jams). Sleep-timer status checks time out after 5 s.
+
 ## 0.7.9 — 2026-10-28
 - Idle screen prices: labels removed (just the gold and silver bar with the price per gram), 25% bigger.
 

@@ -720,3 +720,6 @@ html, body { background: #011815; }
 .im-i .mt-ig { width: 58px; height: 39px; margin-right: 16px; }
 .im-p { font-size: 38px; }
 .im-p .mt-u { font-size: 20px; }
+
+/* 0.7.10: the playing equaliser stops animating while hidden behind the idle screen (saves constant repaints) */
+.stage.idle .qp.on .qp-eq i { -webkit-animation: none; animation: none; }

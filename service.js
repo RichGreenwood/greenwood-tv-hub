@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.7.9';
+var VERSION = '0.7.10';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
@@ -60,7 +60,11 @@ var APPS = [ /* native app IDs read from this TV (apps.csv, 24 Oct 2026). Add he
   '3201505002589', '3201511006428', '11111300404', '3201909019271'
 ];
 var HIDE = /^(xvvl3S1bvH|xvvl3S1bTI)\./; /* TizenBrew + its installer: not shown in All apps */
-var appCache = { at: 0, list: [], icons: {} };
+var appCache = { at: 0, list: [], icons: {} }, appWait = null;
+/* 0.7.10: one unexpected error must never take the whole helper down (apps, calendar, radio, keys all stop with it) */
+process.on('uncaughtException', function (e) {
+  try { log('caught: ' + String((e && e.stack) || e).replace(/\s+/g, ' ').slice(0, 160)); } catch (x) { /* ignore */ }
+});
 var WAIT_MS = 30000; /* time for Ričards to press Allow on first use */
 
 function readToken() {
@@ -109,13 +113,15 @@ function sendKey(key, cb, host) {
   var buf = new Buffer(0);
   var sock;
   var last = 'none'; /* last thing seen, for the on-screen error */
-  var timer = setTimeout(function () { finish('timeout'); }, WAIT_MS);
+  /* 0.7.10: the 30 s wait is only for the first-use Allow prompt; with a saved token a key gets 6 s */
+  var timer = setTimeout(function () { finish('timeout'); }, token ? 6000 : WAIT_MS);
 
   function finish(err) {
     if (done) { return; }
     done = true;
     clearTimeout(timer);
     try { sock.end(); } catch (e) { /* ignore */ }
+    setTimeout(function () { try { sock.destroy(); } catch (e) { /* ignore */ } }, 2000);
     log((err || 'ok') + ' ' + key + ' via ' + host + ' after ' + last + (token ? ' (token)' : ' (no token)'));
     cb(err, last);
   }
@@ -168,8 +174,8 @@ function samsungApps(cb, host) {
   var token = readToken();
   if (!token) { cb('no token'); return; }
   var done = false, upgraded = false, buf = new Buffer(0), sock;
-  var timer = setTimeout(function () { finish('timeout'); }, 12000);
-  function finish(err, list) { if (done) { return; } done = true; clearTimeout(timer); try { sock.end(); } catch (e) { /* ignore */ } cb(err, list); }
+  var timer = setTimeout(function () { finish('timeout'); }, 5000);
+  function finish(err, list) { if (done) { return; } done = true; clearTimeout(timer); try { sock.destroy(); } catch (e) { /* ignore */ } cb(err, list); }
   try {
     sock = tls.connect({ host: host, port: 8002, rejectUnauthorized: false }, function () {
       sock.write('GET /api/v2/channels/samsung.remote.control?name=' + NAME_B64 + '&token=' + token + ' HTTP/1.1\r\n' +
@@ -208,6 +214,15 @@ function usableTizenApp(a) {
 }
 function readApps(cb) {
   if (Date.now() - appCache.at < 10 * 60000 && appCache.list.length) { cb(null, appCache.list); return; }
+  /* 0.7.10: one fetch at a time; everyone asking meanwhile (e.g. one icon per app) waits for the same answer */
+  if (appWait) { appWait.push(cb); return; }
+  appWait = [cb];
+  readAppsNow(function (err, list) {
+    var w = appWait; appWait = null;
+    w.forEach(function (f) { try { f(err, list); } catch (e) { /* ignore */ } });
+  });
+}
+function readAppsNow(cb) {
   samsungApps(function (err, data) {
     if (!err && data) {
       var list = [], icons = {};
@@ -380,7 +395,9 @@ function tzTransitions(tz, year) {
 }
 function tzOffsetAt(tz, utcMs) {
   var y = new Date(utcMs).getUTCFullYear();
-  var tr = tzTransitions(tz, y);
+  /* 0.7.10: transitions are worked out once per zone and year (this ran for every repeat of every event and froze the helper for seconds) */
+  var tc = tz._tc || (tz._tc = {});
+  var tr = tc[y] || (tc[y] = tzTransitions(tz, y));
   var off = tz.rules.length ? tz.rules[0].from : 0;
   for (var i = 0; i < tr.length; i++) { if (tr[i].at <= utcMs) { off = tr[i].offset; } }
   return off;
@@ -415,7 +432,7 @@ function builtinZone(tzid) {
 function wallToUtc(f, zones) {
   if (f.allDay) { return new Date(f.y, f.mo - 1, f.d, 0, 0, 0).getTime(); }
   if (f.utc) { return Date.UTC(f.y, f.mo - 1, f.d, f.h, f.mi, f.s); }
-  var tz = f.tzid ? (zones[f.tzid] || builtinZone(f.tzid)) : null;
+  var tz = f.tzid ? (zones[f.tzid] || (zones[f.tzid] = builtinZone(f.tzid))) : null;
   if (!tz) { return new Date(f.y, f.mo - 1, f.d, f.h, f.mi, f.s).getTime(); }
   var wall = Date.UTC(f.y, f.mo - 1, f.d, f.h, f.mi, f.s);
   if (typeof tz.fixed === 'number') { return wall - tz.fixed * 60000; }
@@ -460,12 +477,16 @@ function expand(ev, winStart, winEnd, zones) {
     return ms < winEnd;
   }
   var s = ev.start;
+  /* 0.7.10: without COUNT, jump straight to a little before the window instead of walking every day/week since the first date */
+  var skipDays = count ? 0 : Math.floor((winStart - durMs - ev.startMs) / 86400000) - 2;
   if (freq === 'DAILY') {
-    for (var i = 0; guard++ < 20000; i += interval) { if (!take(addDaysF(s, i))) { break; } }
+    var i0 = skipDays > 0 ? Math.floor(skipDays / interval) * interval : 0;
+    for (var i = i0; guard++ < 20000; i += interval) { if (!take(addDaysF(s, i))) { break; } }
   } else if (freq === 'WEEKLY') {
     var days = byday.length ? byday.map(function (x) { return WD[x.slice(-2)]; }).sort() : [weekday(s)];
     var weekStart = addDaysF(s, -((weekday(s) + 6) % 7)); /* Monday of the first week */
-    outer: for (var w = 0; guard++ < 5000; w += interval) {
+    var w0 = skipDays > 7 ? Math.floor((skipDays - 7) / 7 / interval) * interval : 0;
+    outer: for (var w = w0; guard++ < 5000; w += interval) {
       var mon = addDaysF(weekStart, w * 7);
       var order = days.map(function (d) { return (d + 6) % 7; }).sort(function (a, b) { return a - b; });
       for (var k = 0; k < order.length; k++) {
@@ -704,12 +725,15 @@ function radioRelay(u, res, depth, useRoots) {
   var p = urlm.parse(String(u || ''));
   if (!/^https?:$/.test(p.protocol || '') || !p.hostname || depth > 4) { res.statusCode = 400; res.end(); return; }
   var secure = p.protocol === 'https:', port = +p.port || (secure ? 443 : 80), path = p.path || '/';
+  if (!(port >= 1 && port <= 65535)) { if (!res.headersSent) { res.statusCode = 400; } try { res.end(); } catch (e0) { /* ignore */ } return; }
   if (secure && radioTls[p.hostname] === 'roots') { useRoots = true; }
   var opts = { host: p.hostname, port: port, servername: p.hostname };
   if (useRoots) { opts.ca = RADIO_ROOTS; }
   var seen = res.gwSeen || (res.gwSeen = radioSeenAdd({ host: p.hostname, at: Date.now(), code: 0, type: '', bytes: 0, firstMs: 0, end: 'connecting' }));
   seen.host = p.hostname; seen.end = 'connecting';
-  var sock = secure ? tlsm.connect(opts) : netm.connect({ host: p.hostname, port: port });
+  var sock;
+  try { sock = secure ? tlsm.connect(opts) : netm.connect({ host: p.hostname, port: port }); }
+  catch (e1) { seen.end = 'bad address'; if (!res.headersSent) { res.statusCode = 502; } try { res.end(); } catch (e2) { /* ignore */ } return; }
   var chunks = [], got = 0, passing = false, finished = false;
   function fail(code, why) { if (why && /^(connecting|no reply|passing)$/.test(seen.end)) { seen.end = why; } if (finished) { return; } finished = true; try { sock.destroy(); } catch (e) { /* ignore */ } if (!res.headersSent) { res.statusCode = code; res.end(); } else { try { res.end(); } catch (e2) { /* ignore */ } } }
   try { sock.setKeepAlive(true, 10000); } catch (e) { /* ignore */ }
@@ -785,6 +809,7 @@ function getJsonX(url, cb, roots, depth) {
     });
     req.setTimeout(12000, function () { req.abort(); finish('timeout'); });
     req.on('error', function (e) {
+      if (done) { return; }
       if (!roots && radioCertErr(e)) { done = true; getJsonX(url, cb, true, depth); return; }
       finish((e && e.code) || 'network');
     });
@@ -960,11 +985,12 @@ function startSetup() {
         if (setup.tries >= 5) { stopSetup(); }
         res.statusCode = 403; res.end('{"ok":false,"error":"wrong code"}'); return;
       }
-      var list = (data.calendars || []).slice(0, 4).map(function (c) {
+      var src = Object.prototype.toString.call(data.calendars) === '[object Array]' ? data.calendars : [];
+      var list = src.filter(function (c) { return c && typeof c === 'object'; }).slice(0, 4).map(function (c) {
         return { url: String(c.url || '').trim(), label: String(c.label || 'Calendar').replace(/[^\w À-ɏ+&-]/g, '').slice(0, 24) };
       });
       var bad = list.filter(function (c) { return !ICS_RE.test(c.url); });
-      var wifi = data.wifi && data.wifi.pass ? { ssid: String(data.wifi.ssid || '').slice(0, 32), pass: String(data.wifi.pass).slice(0, 63), type: 'WPA' } : null;
+      var wifi = data.wifi && typeof data.wifi === 'object' && data.wifi.pass ? { ssid: String(data.wifi.ssid || '').slice(0, 32), pass: String(data.wifi.pass).slice(0, 63), type: 'WPA' } : null;
       if (wifi && (!wifi.ssid || wifi.pass.length < 8)) { res.statusCode = 400; res.end('{"ok":false,"error":"Wi-Fi name and a password of 8 or more characters are needed"}'); return; }
       if ((!list.length && !wifi) || bad.length) { res.statusCode = 400; res.end('{"ok":false,"error":"only Google Calendar iCal links are accepted"}'); return; }
       var cfg = readCfg();
@@ -1031,7 +1057,7 @@ function setSleepUntil(ts) {
     if (retired) { return; }
     sleep.endsAt = 0;
     /* only switch off if the TV is still on (KEY_POWER would otherwise switch it on) */
-    http.get('http://127.0.0.1:8001/api/v2/', function (res) {
+    var sreq = http.get('http://127.0.0.1:8001/api/v2/', function (res) {
       var b = '';
       res.on('data', function (c) { b += c; });
       res.on('end', function () {
@@ -1040,17 +1066,23 @@ function setSleepUntil(ts) {
         log('sleep timer fired, TV ' + (on ? 'on -> KEY_POWER' : 'not on -> nothing'));
         if (on) { sleepPowerOff(0); }
       });
-    }).on('error', function () { log('sleep timer: status page not reachable, nothing sent'); });
+    });
+    sreq.on('error', function () { log('sleep timer: status page not reachable, nothing sent'); });
+    sreq.setTimeout(5000, function () { sreq.abort(); });
   }, ts - Date.now());
 }
 
 /* Switch off, then confirm on the status page; if the TV still reports "on", try the other route (max 3 tries). */
 function powerState(cb) {
-  http.get('http://127.0.0.1:8001/api/v2/', function (res) {
+  var done = false;
+  function fin(st) { if (!done) { done = true; cb(st); } }
+  var preq = http.get('http://127.0.0.1:8001/api/v2/', function (res) {
     var b = '';
     res.on('data', function (c) { b += c; });
-    res.on('end', function () { var st = ''; try { st = JSON.parse(b).device.PowerState || ''; } catch (e) { st = ''; } cb(st); });
-  }).on('error', function () { cb(''); });
+    res.on('end', function () { var st = ''; try { st = JSON.parse(b).device.PowerState || ''; } catch (e) { st = ''; } fin(st); });
+  });
+  preq.on('error', function () { fin(''); });
+  preq.setTimeout(5000, function () { preq.abort(); fin(''); });
 }
 function sleepPowerOff(attempt) {
   var host = attempt === 1 ? (lanIp() || '127.0.0.1') : '127.0.0.1';
@@ -1179,7 +1211,7 @@ function checkUpdate(force, cb) {
     }
     /* fallback: jsDelivr's list (versions without the "v") */
     getJson('https://data.jsdelivr.com/v1/packages/gh/' + REPO, function (err2, d) {
-      if (!err2 && d && d.versions) {
+      if (!err2 && d && Object.prototype.toString.call(d.versions) === '[object Array]') {
         d.versions.forEach(function (x) { if (verNum(x.version) > verNum(best)) { best = 'v' + x.version; } });
         upd = { at: Date.now(), latest: best, error: '' };
       } else { upd.error = err || err2 || 'no answer'; upd.at = Date.now(); }

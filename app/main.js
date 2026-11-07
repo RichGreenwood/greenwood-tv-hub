@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.7.9';
+  var VERSION = '0.7.10';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -88,12 +88,15 @@
     var x = new XMLHttpRequest();
     var done = false;
     x.open('GET', url, true);
-    if (timeoutMs) { x.timeout = timeoutMs; }
+    x.timeout = timeoutMs || 15000;  /* 0.7.10: every request ends, even on a stuck connection */
     x.onload = function () {
       if (done) { return; }
       done = true;
       if (x.status >= 200 && x.status < 300 || (x.status === 0 && x.responseText)) {
-        try { cb(null, JSON.parse(x.responseText)); } catch (e) { cb(e); }
+        /* 0.7.10: parse first, then call back once. An error inside the callback no longer runs it a second time. */
+        var data, perr = null;
+        try { data = JSON.parse(x.responseText); } catch (e) { perr = e; }
+        if (perr) { cb(perr); } else { cb(null, data); }
       } else { cb(new Error('HTTP ' + x.status)); }
     };
     x.onerror = x.ontimeout = function () { if (!done) { done = true; cb(new Error('network')); } };
@@ -476,7 +479,7 @@
   }
   function loadAllApps(cb) {
     if (!ON_TV) { cb(staticApps()); return; }
-    callService('/apps', function (r) { cb(r.ok && r.apps && r.apps.length ? r.apps : staticApps()); }, 6000);
+    callService('/apps', function (r) { cb(r.ok && r.apps && r.apps.length ? r.apps : staticApps()); }, 15000);
   }
   function openAll() {
     hideDrawers();
@@ -500,9 +503,9 @@
       setAllFocus(idx);
     });
   }
-  function closeAll() { mode = 'home'; $('all').hidden = true; clearTimeout(statsTimer); setFocus(pos.r, pos.c); }
+  function closeAll() { mode = 'home'; $('all').hidden = true; clearTimeout(statsTimer); statsGen++; setFocus(pos.r, pos.c); }
   /* TV stats bar on All apps: storage, memory, processor (service.js /stats), every 3 s while the screen is open */
-  var statsTimer = null;
+  var statsTimer = null, statsGen = 0;
   function gb(bytes) { return (bytes / 1073741824).toFixed(1).replace('.', t('decimal') || '.') + ' GB'; }
   function meter(id, label, value, frac) {
     var pct = Math.max(0, Math.min(1, frac || 0));
@@ -522,7 +525,12 @@
     clearTimeout(statsTimer);
     if (mode !== 'all') { return; }
     if (!ON_TV) { paintStats({ storage: { free: 2.4 * 1073741824, total: 4.6 * 1073741824 }, mem: { total: 2.5 * 1073741824, avail: 1.3 * 1073741824 }, cpu: 0.18 }); return; }
-    callService('/stats', function (r) { paintStats(r.ok ? r : null); statsTimer = setTimeout(pollStats, 3000); }, 4000);
+    var g = ++statsGen;
+    callService('/stats', function (r) {
+      if (g !== statsGen || mode !== 'all') { return; }
+      paintStats(r.ok ? r : null);
+      if (!document.hidden) { statsTimer = setTimeout(pollStats, 3000); }
+    }, 4000);
   }
   function allKey(k) {
     var n = allTiles.length;
@@ -539,7 +547,15 @@
   }
 
   /* ---------- Screens (focusable .fx elements, spatial navigation) ---------- */
-  var scr = { id: '', fx: [], f: -1, onBack: null, timer: null };
+  var scr = { id: '', fx: [], f: -1, onBack: null, timer: null, poll: null, gen: 0 };
+  /* 0.7.10: every screen render, close and idle gets a new number. Late answers and loops from an old screen check it and stop. */
+  function scrEnd() {
+    scr.gen++;
+    clearInterval(scr.timer); clearTimeout(scr.poll);
+    var ob = scr.onBack; scr.onBack = null;
+    if (ob) { try { ob(); } catch (e) { /* ignore */ } }
+  }
+  function scrLive(g, id) { return g === scr.gen && mode === 'scr' && (!id || scr.id === id); }
 
   function openScreen(id) {
     hideDrawers();
@@ -549,9 +565,8 @@
     renderScreen(id, 0);
   }
   function renderScreen(id, focusIndex) {
-    clearInterval(scr.timer);
+    scrEnd();
     scr.id = id;
-    scr.onBack = null;
     var s = SCREENS[id];
     var title = s.title(prefs.lang), title2 = hasSecond() ? s.title(prefs.lang2) : '';
     $('scr-title').innerHTML = esc(title) + (title2 && title2 !== title ? '<span class="sec-inline">' + esc(title2) + '</span>' : '');
@@ -569,8 +584,8 @@
     if (scr.fx[i]) { scr.fx[i].classList.add('focus'); }
   }
   function closeScreen() {
-    clearInterval(scr.timer);
-    if (scr.onBack) { scr.onBack(); }
+    scrEnd();
+    scr.id = '';
     $('scr').hidden = true;
     mode = 'home';
     setFocus(pos.r, pos.c);
@@ -842,23 +857,24 @@
           $('ab-rows').innerHTML = html;
         }
         paint(null);
-        if (ON_TV) { callService('/status', function (r) { if (scr.id === 'about') { paint(r.ok ? r : null); } }, 4000); }
+        var g = scr.gen;
+        if (ON_TV) { callService('/status', function (r) { if (scrLive(g, 'about')) { paint(r.ok ? r : null); } }, 4000); }
       },
       act: function (a, v) {
         if (a === 'go') { renderScreen(v, 0); }
         else if (a === 'setup') { renderScreen('setup'); }
-        else if (a === 'check') { checkUpdate(true, function () { if (scr.id === 'about') { renderScreen('about', 0); } toast(updInfo && updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate')); }); }
+        else if (a === 'check') { checkUpdate(true, function () { if (mode === 'scr' && scr.id === 'about') { renderScreen('about', 0); } toast(updInfo && updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate')); }); }
         else if (a === 'update') { runUpdate(v); }
-        else if (a === 'soundtest') { toast(t('soundPlaying')); soundTest(function () { if (scr.id === 'about') { renderScreen('about', scr.f); } }); }
+        else if (a === 'soundtest') { toast(t('soundPlaying')); soundTest(function () { if (mode === 'scr' && scr.id === 'about') { renderScreen('about', scr.f); } }); }
         else if (a === 'keytest') {
           if (!ON_TV) { toast(t('keyTestOk')); return; }
           callService('/key?k=KEY_VOLUP', function (r1) {
-            if (!r1.ok) { toast(fmt(t('keyTestFail'), (r1.error || '?') + (r1.detail ? ' / ' + r1.detail : ''))); renderScreen('about', scr.f); return; }
-            callService('/key?k=KEY_VOLDOWN', function () { toast(t('keyTestOk')); renderScreen('about', scr.f); }, 70000);
+            if (!r1.ok) { toast(fmt(t('keyTestFail'), (r1.error || '?') + (r1.detail ? ' / ' + r1.detail : ''))); if (mode === 'scr' && scr.id === 'about') { renderScreen('about', scr.f); } return; }
+            callService('/key?k=KEY_VOLDOWN', function () { toast(t('keyTestOk')); if (mode === 'scr' && scr.id === 'about') { renderScreen('about', scr.f); } }, 70000);
           }, 70000);
         }
-        else if (a === 'refresh') { loadCalendar(true, function () { toast(t('calRefresh') + ' ✓'); if (scr.id === 'about') { renderScreen('about', scr.f); } }); }
-        else if (a === 'forget') { callService('/setup/forget', function () { calData = { configured: 0, events: [], at: 0 }; store('cal', calData); renderAgenda(); renderWeek(); renderScreen('about', 0); }); }
+        else if (a === 'refresh') { loadCalendar(true, function () { toast(t('calRefresh') + ' ✓'); if (mode === 'scr' && scr.id === 'about') { renderScreen('about', scr.f); } }); }
+        else if (a === 'forget') { callService('/setup/forget', function () { calData = { configured: 0, events: [], at: 0 }; store('cal', calData); renderAgenda(); renderWeek(); if (mode === 'scr' && scr.id === 'about') { renderScreen('about', 0); } }); }
       }
     },
     updates: {
@@ -876,7 +892,7 @@
       },
       act: function (a, v) {
         if (a === 'install') { runUpdate(v); }
-        else if (a === 'check') { checkUpdate(true, function () { if (scr.id === 'updates') { renderScreen('updates', 0); } toast(updInfo && updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate')); }); }
+        else if (a === 'check') { checkUpdate(true, function () { if (mode === 'scr' && scr.id === 'updates') { renderScreen('updates', 0); } toast(updInfo && updInfo.newer ? fmt(t('updAvailable'), updInfo.latest) : t('updUpToDate')); }); }
       }
     },
     tvinfo: {
@@ -919,10 +935,12 @@
           paintStats({ storage: { free: 2.4 * 1073741824, total: 4.6 * 1073741824 }, mem: { total: 2.5 * 1073741824, avail: 1.5 * 1073741824 }, cpu: 0.18 });
           return;
         }
-        callService('/info', function (i) { callService('/status', function (s) { if (scr.id === 'tvinfo') { paintInfo(i.ok ? i : {}, s.ok ? s : null); } }, 4000); }, 4000);
+        var g = scr.gen;
+        callService('/info', function (i) { callService('/status', function (s) { if (scrLive(g, 'tvinfo')) { paintInfo(i.ok ? i : {}, s.ok ? s : null); } }, 4000); }, 4000);
+        /* 0.7.10: this loop used to keep running after Back (one more loop per visit) */
         (function poll() {
-          if (scr.id !== 'tvinfo') { return; }
-          callService('/stats', function (r) { if (scr.id === 'tvinfo') { paintStats(r.ok ? r : null); setTimeout(poll, 3000); } }, 4000);
+          if (!scrLive(g, 'tvinfo') || document.hidden) { return; }
+          callService('/stats', function (r) { if (scrLive(g, 'tvinfo')) { paintStats(r.ok ? r : null); clearTimeout(scr.poll); scr.poll = setTimeout(poll, 3000); } }, 4000);
         })();
       }
     },
@@ -949,12 +967,15 @@
           }
         }
         if (!ON_TV) { $('su-code').textContent = '482 913'; showLink('192.168.1.103', 8096); return; }
+        var g = scr.gen;
         callService('/setup/start', function (r) {
+          if (!scrLive(g, 'setup')) { if (r.ok) { callService('/setup/stop', function () {}); } return; }
           if (!r.ok) { $('su-state').textContent = t('setupFail'); return; }
           showLink(r.ip || '?', r.port || 8096);
           $('su-code').textContent = r.pin.slice(0, 3) + ' ' + r.pin.slice(3);
           scr.timer = setInterval(function () {
             callService('/setup/status', function (st) {
+              if (!scrLive(g, 'setup')) { return; }
               if (st.done) {
                 clearInterval(scr.timer);
                 scr.onBack = null;
@@ -991,6 +1012,7 @@
     var mb = $('mi-upd');
     if (mb) { mb.textContent = updInfo && updInfo.newer ? updInfo.latest : ''; }
   }
+  var updTimer = null;
   function runUpdate(tag) {
     renderScreen('update');
     var st = $('up-state');
@@ -999,11 +1021,13 @@
     callService('/update/apply?tag=' + encodeURIComponent(tag), function (r) {
       if (!r.ok) { st.textContent = t('updFail') + ' (' + (r.error || '?') + ')'; return; }
       var want = tag.replace(/^v/, ''), tries = 0;
-      scr.timer = setInterval(function () {
+      /* 0.7.10: own timer, one at a time, so leaving the screen never strands or doubles the switch-over */
+      clearInterval(updTimer);
+      updTimer = setInterval(function () {
         tries++;
         callService('/status', function (s) {
-          if (s && s.version === want) { clearInterval(scr.timer); st.textContent = t('updDone'); setTimeout(function () { location.href = r.appPath; }, 800); }
-          else if (tries >= 30) { clearInterval(scr.timer); st.textContent = t('updRestart'); }
+          if (s && s.version === want) { clearInterval(updTimer); st.textContent = t('updDone'); setTimeout(function () { location.href = r.appPath; }, 800); }
+          else if (tries >= 30) { clearInterval(updTimer); st.textContent = t('updRestart'); }
         }, 1800);
       }, 2000);
     }, 40000);
@@ -1508,7 +1532,7 @@
     globe.light = light; globe.lightAt = ms; globe.lastOff = -1;
   }
   function globeFrame() {
-    if (!globe.on) { return; }
+    if (!globe.on || document.hidden || !globe.cv || !document.body.contains(globe.cv)) { globe.on = false; return; }
     var t0 = Date.now();
     if (t0 - globe.lightAt > 60000) { globeLight(t0); }
     var off = Math.floor(globe.off) & (GW - 1);
@@ -1543,9 +1567,11 @@
   function globeStart(cv) {
     globeStop();
     if (!cv || !cv.getContext) { return; }
+    var gen = globe.gen;
     globe.cv = cv; globe.ctx = cv.getContext('2d');
     globeLoadMask(function (err) {
-      if (err || !globe.ctx) { return; }
+      /* 0.7.10: Back pressed while the land map was still loading: do not switch the globe on behind the scenes */
+      if (err || !globe.ctx || gen !== globe.gen) { return; }
       if (!globe.px || globe.size !== cv.width) { globeTables(cv.width); globe.size = cv.width; }
       globe.img = globe.ctx.createImageData(cv.width, cv.width);
       globe.data32 = new Uint32Array(globe.img.data.buffer);
@@ -1556,7 +1582,7 @@
       globeFrame();
     });
   }
-  function globeStop() { globe.on = false; clearTimeout(globe.timer); }
+  function globeStop() { globe.gen = (globe.gen || 0) + 1; globe.on = false; clearTimeout(globe.timer); }
   /* ---------- Quick play radio: plays inside the hub, home stays on screen ---------- */
   var radio = { list: [], groups: [], cur: null, audio: null, state: 'off', routes: [], idx: 0, att: 0, retry: 0, timer: 0, wait: 0, why: [], last: null, played: false, drops: 0, good: 0, pos: 0, posAt: 0, ticks: 0, drops2: [], stage: 0, dataAt: 0, t0: 0, tPlay: 0 };
   function radioLoad() {
@@ -1631,7 +1657,11 @@
         if (radio.state === 'off') { return; }
         clearTimeout(radio.timer);
         var r = radio.routes[radio.idx], again = radio.played;
-        radio.state = 'playing'; radio.retry = 0; radio.drops = 0; radio.played = true; radio.good = radio.idx;
+        radio.state = 'playing'; radio.retry = 0; radio.played = true; radio.good = radio.idx;
+        /* 0.7.10: count the back-off down only after a steady minute, so a station that plays a moment and drops
+           no longer reconnects every few seconds forever */
+        clearTimeout(radio.okT);
+        if (!again) { radio.drops = 0; } else { radio.okT = setTimeout(function () { if (radio.state === 'playing') { radio.drops = 0; } }, 60000); }
         radio.pos = a.currentTime; radio.posAt = Date.now(); radio.ticks = 0;
         renderRadio();
         var n = (radio.drops2 || []).filter(function (x) { return Date.now() - x < 3600000; }).length;
@@ -1710,8 +1740,8 @@
     if (radio.why.length > 8) { radio.why.shift(); }
     if (radio.played) {
       /* it worked before: keep it on and reconnect, starting with the address that last worked */
-      var first = radio.state === 'playing';
-      if (!first && radio.idx + 1 < radio.routes.length) { radio.idx++; radioStart(); return; }
+      var first = radio.state === 'playing' && radio.drops === 0;
+      if (radio.state !== 'playing' && radio.idx + 1 < radio.routes.length) { radio.idx++; radioStart(); return; }
       var delay = RADIO_BACKOFF[Math.min(radio.drops, RADIO_BACKOFF.length - 1)];
       radio.drops++;
       radio.idx = radio.good || 0;
@@ -1742,7 +1772,7 @@
     }
   }
   function radioStopAudio() {
-    clearTimeout(radio.timer); clearTimeout(radio.wait);
+    clearTimeout(radio.timer); clearTimeout(radio.wait); clearTimeout(radio.okT);
     if (radio.audio) { try { radio.audio.pause(); radio.audio.removeAttribute('src'); radio.audio.load(); } catch (e) { /* ignore */ } }
   }
   function radioStop() {
@@ -1822,7 +1852,8 @@
     if (mode === 'drawer' || mode === 'rdrawer') { hideDrawers(); }
     if (mode === 'card') { $('card').hidden = true; }
     if (mode === 'all') { $('all').hidden = true; }
-    if (mode === 'scr') { clearInterval(scr.timer); if (scr.onBack) { scr.onBack(); } $('scr').hidden = true; }
+    if (mode === 'scr') { scrEnd(); scr.id = ''; $('scr').hidden = true; }
+    if (mode === 'all') { clearTimeout(statsTimer); statsGen++; }
     blurHome();
     mode = 'idle';
     renderAgenda();
@@ -1910,6 +1941,15 @@
     var h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
     var daySec = h * 3600 + m * 60 + s;
     var showSec = !(theme.clock && theme.clock.secondHand === false) && prefs.face !== 'digital';
+    /* 0.7.10: the next tick is set first, so one error below can no longer stop the clock and every minute,
+       hour and day update for good */
+    var wait = showSec ? 1000 - d.getMilliseconds() : (60 - s) * 1000 - d.getMilliseconds();
+    tickTimer = setTimeout(tick, Math.max(200, wait));
+    try { tickBody(d, h, m, s, daySec, showSec); } catch (e) { lastMin = -1; lastHour = -1; lastDay = -1; tickErr(e); }
+  }
+  var tickErrs = 0;
+  function tickErr(e) { tickErrs++; if (tickErrs <= 3 && window.console) { console.error('tick', e); } }
+  function tickBody(d, h, m, s, daySec, showSec) {
     if (prefs.face !== 'digital') {
       turn(hands.hour, daySec / 120); turn(hands.hourS, daySec / 120, SHADOW.hour);
       turn(hands.min, daySec / 10); turn(hands.minS, daySec / 10, SHADOW.minute);
@@ -1931,13 +1971,12 @@
       $('idle-date').textContent = ds;
       $('idle-date2').textContent = hasSecond() ? formatDateL(prefs.lang2, d) : '';
       $('dg-day').textContent = t('days')[d.getDay()] + ' ' + d.getDate() + (prefs.lang === 'lv' ? '.' : '');
+      if (theme.weather && theme.weather.enabled) { showWeather(store('weather'), false); }  /* 0.7.10: second-language date line turns over at midnight too */
       showNameDays();
       renderWeek();
       loadCalendar(false);
     }
     if (h !== lastHour) { lastHour = h; var age = (((d.getTime() / 86400000 - 10962.76) % 29.530588) + 29.530588) % 29.530588; $('moon-path').setAttribute('d', moonPath(age / 29.530588)); updateGreeting(h); renderIdleHours(); }
-    var wait = showSec ? 1000 - d.getMilliseconds() : (60 - s) * 1000 - d.getMilliseconds();
-    tickTimer = setTimeout(tick, Math.max(200, wait));
   }
   function initWatch() {
     hands = { hour: $('h-hour'), hourS: $('h-hour-s'), min: $('h-min'), minS: $('h-min-s'), sec: $('h-sec'), secS: $('h-sec-s'),
@@ -1973,9 +2012,12 @@
     $('date2').textContent = hasSecond() ? formatDateL(prefs.lang2, new Date()) + (word2 ? ' · ' + word2 : '') : '';
     renderIdleHours();
   }
+  var weatherBusy = 0;
   function weather(force) {
     var cfg = theme.weather || {};
     clearTimeout(weatherTimer);
+    /* 0.7.10: a request is already on its way (e.g. back from another app): it re-arms the timer itself */
+    if (weatherBusy && Date.now() - weatherBusy < 20000) { return; }
     if (!cfg.enabled) { $('weather').textContent = ''; return; }
     var maxAge = (cfg.cacheMinutes || 30) * 60000;
     var cached = store('weather');
@@ -1989,7 +2031,12 @@
       '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,is_day,wind_speed_10m,wind_gusts_10m,wind_direction_10m' +
       '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,precipitation_probability_max,uv_index_max' +
       '&wind_speed_unit=ms&forecast_days=7&timezone=auto';
+    weatherBusy = Date.now();
     getJSON(url, function (err, data) {
+      weatherBusy = 0;
+      clearTimeout(weatherTimer);
+      weatherTimer = setTimeout(weather, maxAge);
+      try {
       if (!err && data && data.current) {
         var dl = data.daily || {}, c = data.current, hr = data.hourly || {};
         /* keep the hours from now on (about 2 days) to stay small in storage */
@@ -2007,7 +2054,7 @@
       } else {
         showWeather(cached, true);
       }
-      weatherTimer = setTimeout(weather, maxAge);
+      } catch (e) { /* bad answer: keep the last screen, try again next round */ }
     }, 12000);
   }
 
@@ -2037,7 +2084,11 @@
   }
 
   /* ---------- Start ---------- */
+  function safe(f) { try { f(); } catch (e) { if (window.console) { console.error('start', e); } } }
   function start() {
+    /* 0.7.10: remote keys work even if a later start-up step fails */
+    document.addEventListener('keydown', function (e) { try { onKey(e); } catch (x) { if (window.console) { console.error('key', x); } } });
+    document.addEventListener('visibilitychange', function () { try { onVisibility(); } catch (x) { if (window.console) { console.error('vis', x); } } });
     loadPrefs();
     applyTheme();
     var c = store('cal');
@@ -2046,20 +2097,18 @@
     buildRows();
     var saved = store('focus');
     pos = saved && rows[saved.r] && rows[saved.r][saved.c] ? saved : { r: 0, c: 0 };
-    refreshAll();
-    weather(false);
-    loadCalendar(false);
-    pollSleep();
+    safe(refreshAll);
+    safe(function () { weather(false); });
+    safe(function () { loadCalendar(false); });
+    safe(pollSleep);
     setInterval(function () { if (!document.hidden) { loadCalendar(false); pollSleep(); } }, 5 * 60000);
     setTimeout(function () { checkUpdate(false); }, 15000);
     setInterval(function () { if (!document.hidden) { checkUpdate(false); } }, 6 * 3600000);
-    radioLoad();
-    loadMetals();
-    setInterval(function () { if (!document.hidden) { loadMetals(); } }, 60000);
+    safe(radioLoad);
+    safe(loadMetals);
+    setInterval(function () { if (!document.hidden) { safe(loadMetals); } }, 60000);
     getJSON('data/namedays-lv.json?v=' + VERSION, function (err, d) { if (!err && d) { nameDays = d; showNameDays(); } });
     armIdle();
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('visibilitychange', onVisibility);
     $('edge').addEventListener('click', openDrawer);
     $('edge-r').addEventListener('click', openRDrawer);
     $('drawer').addEventListener('click', function (e) { if (/drawer-dim/.test(e.target.className)) { closeDrawer(); } });
@@ -2072,11 +2121,13 @@
       fit();
     }
   }
+  var loadTries = 0;
   function load() {
     var inline = window.GREENWOOD_INLINE;
     if (inline) { theme = inline.theme; apps = inline.apps; start(); return; }
     getJSON('theme.json?v=' + VERSION, function (err, th) {
-      if (err) { toast('theme.json could not be read'); return; }
+      /* 0.7.10: at power-on the network can be late: try again (5, 10, 20, 30 s …) instead of staying blank */
+      if (err) { toast('theme.json could not be read'); loadTries++; setTimeout(load, Math.min(30000, 5000 * loadTries)); return; }
       theme = th;
       getJSON('apps.json?v=' + VERSION, function (err2, a) { apps = err2 ? {} : a; start(); });
     });
