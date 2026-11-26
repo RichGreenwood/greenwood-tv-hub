@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.7.11';
+  var VERSION = '0.7.12';
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27, BACKSPACE: 8 };
   var HAS_TIZEN = typeof window.tizen !== 'undefined' && !!window.tizen.application;
   var SERVICE = 'http://127.0.0.1:8095';
@@ -38,7 +38,6 @@
   function fmt(s, n) { return String(s).replace('{n}', n); }
 
   var ICONS = {
-    gold: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8h10l3 5H4z"/><path d="M4 13h16l-1.5 5h-13z"/><path d="M15 4.5l1-1.5M18.5 6l1.5-1"/></svg>',
     hdmi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h18v5l-3 3H6l-3-3z"/><path d="M8 11h8"/></svg>',
     iphone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>',
     settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
@@ -211,7 +210,7 @@
 
   /* ---------- Home tiles ---------- */
   function iconFor(id) { return id.indexOf('hdmi') === 0 ? ICONS.hdmi : (ICONS[id] || ''); }
-  var SPECIAL = { iphone: 1, apps: 1, idle: 1, night: 1, calendar: 1, weather: 1, daylight: 1, look: 1, sleep: 1, about: 1, updates: 1, tvinfo: 1, radio: 1, gold: 1, 'qp-toggle': 1, 'qp-pick': 1 };
+  var SPECIAL = { iphone: 1, apps: 1, idle: 1, night: 1, calendar: 1, weather: 1, daylight: 1, look: 1, sleep: 1, about: 1, updates: 1, tvinfo: 1, radio: 1, 'qp-toggle': 1, 'qp-pick': 1 };
   function isLinked(id) { return !!SPECIAL[id] || !!apps[id]; }
   function labelL(lang, item, kind) {
     var d = dict(lang);
@@ -288,8 +287,6 @@
       rh.appendChild(tile.el);
       return tile;
     });
-    /* 0.7.11: with 8+ screens the rows get a little tighter so the last one stays clear of the hint */
-    if (rmenu.length > 7) { rh.classList.add('rm-tight'); } else { rh.classList.remove('rm-tight'); }
   }
 
   function setFocus(r, c) {
@@ -746,17 +743,6 @@
         scr.onBack = globeStop;
       }
     },
-    /* 0.7.11 Gold: price, 1 month change and stats, last month chart, three news sites (QR to open on the phone) */
-    gold: {
-      title: function (lang) { return tl(lang, 'gdTitle'); },
-      html: function () { return '<div class="gd" id="gd"></div>'; },
-      init: function () {
-        var g = scr.gen;
-        function paint() { if (scrLive(g, 'gold')) { $('gd').innerHTML = goldScreen(metalsData && metalsData.gold); goldQrs(); } }
-        paint();
-        scr.timer = setInterval(paint, 60000);
-      }
-    },
     radio: {
       title: function (lang) { return tl(lang, 'radioTitle'); },
       html: function () {
@@ -1074,7 +1060,6 @@
     $('agenda-list').innerHTML = list.length ? list.map(function (e) {
       return '<div class="ag-ev"><span class="ag-n">' + esc(evTitle(e)) + '</span><span class="ag-t">' + esc(e.allDay ? t('allDay') : hhmm(e.start)) + '</span>' + calDot(e) + '</div>';
     }).join('') : '<div class="ag-none">' + esc(t('noMore')) + '</div>';
-    fitRcol();
     var now = Date.now();
     var next = calData.events.filter(function (e) { return !e.allDay && e.start > now; })[0];
     $('idle-next').textContent = next ? t('next') + ': ' + (next.start >= dayStart(1) ? t('days')[new Date(next.start).getDay()] + ' ' : '') + hhmm(next.start) + ' · ' + evTitle(next) : '';
@@ -1108,154 +1093,7 @@
       '<polyline points="' + line + '" fill="none" stroke="' + col + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>' +
       '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="3.2" fill="' + col + '"/></svg>';
   }
-  /* 0.7.11 Gold this week: change against the close 7 days ago, and the closes since then (one point per trading day) */
-  function isoDay(ms) { var d = new Date(ms); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
-  function goldWeek(o) {
-    if (!o || !o.g) { return null; }
-    var today = isoDay(Date.now()), ago = isoDay(dayStart(-7)), pts = [], base = null, i;
-    var days = (o.days || []).filter(function (p) { return p && p.d && p.v > 0; });
-    if (days.length) {
-      for (i = 0; i < days.length; i++) { if (days[i].d <= ago) { base = days[i]; } }
-      if (!base) { return null; }
-      pts.push({ d: base.d, v: base.v });
-      days.forEach(function (p) { if (p.d > base.d && p.d < today) { pts.push({ d: p.d, v: p.v }); } });
-      pts.push({ d: today, v: o.g, now: true });
-    } else {
-      /* older helper: no dates, use the last five closes */
-      var h = (o.hist || []).slice(-6);
-      if (h.length < 2) { return null; }
-      pts = h.slice(0, -1).map(function (v) { return { v: v }; });
-      pts.push({ d: today, v: o.g, now: true });
-    }
-    var chg = o.g - pts[0].v;
-    return { pts: pts, chg: chg, pct: chg / pts[0].v * 100 };
-  }
-  function weekChart(w) {
-    var W = 282, H = 58, n = w.pts.length, vals = w.pts.map(function (p) { return p.v; });
-    var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals), r = mx - mn || 1;
-    function x(i) { return (i / (n - 1) * (W - 24) + 12).toFixed(1); }
-    function y(v) { return (H - 6 - (v - mn) / r * (H - 14)).toFixed(1); }
-    var line = w.pts.map(function (p, i) { return x(i) + ',' + y(p.v); }).join(' ');
-    var by = y(w.pts[0].v), last = w.pts[n - 1];
-    var svg = '<svg class="mw-g" viewBox="0 0 ' + W + ' ' + H + '">' +
-      '<line x1="12" x2="' + (W - 12) + '" y1="' + by + '" y2="' + by + '" stroke="#A9BDB7" stroke-opacity=".45" stroke-width="1.4" stroke-dasharray="4 5"/>' +
-      '<polygon points="' + x(0) + ',' + H + ' ' + line + ' ' + x(n - 1) + ',' + H + '" fill="#EBB42C" fill-opacity=".12"/>' +
-      '<polyline points="' + line + '" fill="none" stroke="#EBB42C" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>' +
-      w.pts.map(function (p, i) { return i === n - 1 ? '' : '<circle cx="' + x(i) + '" cy="' + y(p.v) + '" r="2.6" fill="#EBB42C"/>'; }).join('') +
-      '<circle cx="' + x(n - 1) + '" cy="' + y(last.v) + '" r="4.2" fill="#EBB42C" stroke="#012B28" stroke-width="1.5"/></svg>';
-    var lab = w.pts.map(function (p, i) {
-      if (!p.d) { return ''; }
-      var d = new Date(+p.d.slice(0, 4), +p.d.slice(5, 7) - 1, +p.d.slice(8, 10));
-      return '<span class="mw-l' + (p.now ? ' now' : '') + '" style="left:' + x(i) + 'px">' + esc(t('daysShort')[d.getDay()]) + '</span>';
-    }).join('');
-    return '<div class="mw-c">' + svg + '<div class="mw-ls">' + lab + '</div></div>';
-  }
   function money(v, dp) { return v.toFixed(dp).replace('.', t('decimal') || '.'); }
-  /* 0.7.11 The right column stays at its 0.6.0 place; only if today's agenda + gold week would reach the Watch row does it move up (not past the date) */
-  function fitRcol() {
-    var c = $('rcol');
-    if (!c) { return; }
-    c.style.top = '';
-    var h = c.offsetHeight;
-    if (h && 256 + h > 676) { c.style.top = Math.max(164, 676 - h) + 'px'; }
-  }
-  /* ---------- 0.7.11 Gold screen ---------- */
-  var GOLD_NEWS = [
-    { name: 'Kitco News', host: 'kitco.com', url: 'https://www.kitco.com/news/category/gold', k: 'gdN1' },
-    { name: 'Reuters', host: 'reuters.com', url: 'https://www.reuters.com/markets/commodities/', k: 'gdN2' },
-    { name: 'World Gold Council', host: 'gold.org', url: 'https://www.gold.org/goldhub/research', k: 'gdN3' }
-  ];
-  function dayDate(d) { return new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)); }
-  function dayLabel(d) { var x = dayDate(d); return x.getDate() + (prefs.lang === 'lv' ? '. ' : ' ') + t('monthsShort')[x.getMonth()]; }
-  function goldMonth(o) {
-    if (!o || !o.g || !o.days || !o.days.length) { return null; }
-    var today = isoDay(Date.now()), m = new Date(); m.setMonth(m.getMonth() - 1);
-    var ago = isoDay(m.getTime()), base = null, pts = [];
-    o.days.forEach(function (p) { if (p.v > 0 && p.d <= ago) { base = p; } });
-    if (!base) { return null; }
-    pts.push({ d: base.d, v: base.v });
-    o.days.forEach(function (p) { if (p.v > 0 && p.d > base.d && p.d < today) { pts.push({ d: p.d, v: p.v }); } });
-    pts.push({ d: today, v: o.g, now: true });
-    var hi = pts[0], lo = pts[0], sum = 0;
-    pts.forEach(function (p) { if (p.v > hi.v) { hi = p; } if (p.v < lo.v) { lo = p; } sum += p.v; });
-    var chg = o.g - base.v;
-    return { pts: pts, base: base, chg: chg, pct: chg / base.v * 100, hi: hi, lo: lo, avg: sum / pts.length };
-  }
-  function signed(v, dp, eur) { return (v >= 0 ? '+' : '\u2212') + (eur ? '\u20AC' : '') + money(Math.abs(v), dp); }
-  function goldChart(mo) {
-    var W = 1728, H = 210, n = mo.pts.length, vals = mo.pts.map(function (p) { return p.v; });
-    var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals), r = mx - mn || 1, L = 16, R = 150;
-    function x(i) { return (L + i / (n - 1) * (W - L - R)).toFixed(1); }
-    function y(v) { return (H - 34 - (v - mn) / r * (H - 70)).toFixed(1); }
-    var line = mo.pts.map(function (p, i) { return x(i) + ',' + y(p.v); }).join(' ');
-    var by = y(mo.base.v), s = '';
-    s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + by + '" y2="' + by + '" stroke="#A9BDB7" stroke-opacity=".45" stroke-width="1.5" stroke-dasharray="5 6"/>';
-    s += '<polygon points="' + x(0) + ',' + (H - 26) + ' ' + line + ' ' + x(n - 1) + ',' + (H - 26) + '" fill="#EBB42C" fill-opacity=".1"/>';
-    s += '<polyline points="' + line + '" fill="none" stroke="#EBB42C" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>';
-    s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + (H - 26) + '" y2="' + (H - 26) + '" stroke="#1D4B45" stroke-width="2"/>';
-    /* labels: every Monday + first day; high and low marked */
-    mo.pts.forEach(function (p, i) {
-      if (i === 0 || (dayDate(p.d).getDay() === 1 && i > 1 && i < n - 2) || p.now) {
-        s += '<text x="' + x(i) + '" y="' + (H - 4) + '" text-anchor="' + (i === 0 ? 'start' : 'middle') + '" font-family="Manrope" font-size="15" font-weight="700" fill="' + (p.now ? '#EBB42C' : '#A9BDB7') + '">' + esc(p.now ? t('todayT') : dayLabel(p.d)) + '</text>';
-      }
-    });
-    function mark(p, up) {
-      var i = mo.pts.indexOf(p), cx = +x(i), cy = +y(p.v);
-      return '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="#012B28" stroke="#F4F2EC" stroke-width="2"/>' +
-        '<text x="' + cx + '" y="' + (up ? cy - 14 : cy + 26) + '" text-anchor="middle" font-family="Manrope" font-size="16" font-weight="700" fill="#F4F2EC">\u20AC' + money(p.v, 2) + '</text>';
-    }
-    if (!mo.hi.now) { s += mark(mo.hi, true); }
-    if (!mo.lo.now && mo.lo !== mo.hi) { s += mark(mo.lo, false); }
-    var lx = +x(n - 1), ly = +y(o_last(mo));
-    s += '<circle cx="' + lx + '" cy="' + ly + '" r="7" fill="#EBB42C" stroke="#012B28" stroke-width="2"/>';
-    s += '<text x="' + (lx + 18) + '" y="' + (ly + 7) + '" font-family="Manrope" font-size="22" font-weight="700" fill="#EBB42C">\u20AC' + money(o_last(mo), 2) + '</text>';
-    s += '<text x="' + (W - R + 18) + '" y="' + (+by + 6) + '" font-family="Manrope" font-size="14" font-weight="700" fill="#A9BDB7" letter-spacing="1">' + esc(t('gdBase')) + '</text>';
-    return '<svg class="gd-chart" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '">' + s + '</svg>';
-  }
-  function o_last(mo) { return mo.pts[mo.pts.length - 1].v; }
-  function goldScreen(o) {
-    if (!o || !o.g) { return '<div class="scr-empty"><div class="scr-big">' + esc(t('gdNone')) + '</div><div class="scr-note">' + esc(t('gdNoneHow')) + '</div></div>' + goldNews(); }
-    var mo = goldMonth(o), wk = goldWeek(o), dp = 2, has = typeof o.pct === 'number' && isFinite(o.pct), up = (o.pct || 0) >= 0;
-    var hero = '<div class="gd-hero">' + ingot('gold') +
-      '<div class="gd-ha"><div class="gd-k">' + esc(t('mtGold')) + ' · ' + esc(t('gdPerGram')) + '</div>' +
-      '<div class="gd-p">\u20AC' + money(o.g, dp) + '<span class="gd-u">/g</span></div>' +
-      (has ? '<div class="gd-today ' + (up ? 'up' : 'dn') + '">' + (up ? '\u25B2 ' : '\u25BC ') + signed(o.chg || 0, dp, true) + ' · ' + signed(o.pct, 2) + '% <span>' + esc(t('mtToday')) + '</span></div>' : '') +
-      '</div></div>';
-    function tile(k, v, sub, cls) { return '<div class="wd gd-t"><div class="wd-k">' + esc(t(k)) + '</div><div class="wd-v' + (cls ? ' ' + cls : '') + '">' + v + '</div><div class="wd-s">' + esc(sub || '') + '</div></div>'; }
-    var det = '<div class="wh-det gd-det">' +
-      tile('gdMonth', mo ? signed(mo.chg, dp, true) + '<small> ' + signed(mo.pct, 2) + '%</small>' : '–', mo ? fmt(t('gdSince'), dayLabel(mo.base.d)) : '', mo ? (mo.chg >= 0 ? 'up' : 'dn') : '') +
-      tile('gdWeek', wk ? signed(wk.chg, dp, true) + '<small> ' + signed(wk.pct, 2) + '%</small>' : '–', t('gdWeekSub'), wk ? (wk.chg >= 0 ? 'up' : 'dn') : '') +
-      tile('gdOunce', '\u20AC' + Math.round(o.g * 31.1034768).toLocaleString('en-US').replace(/,/g, '\u2009'), t('gdOunceSub')) +
-      tile('gdHigh', mo ? '\u20AC' + money(mo.hi.v, dp) : '–', mo ? (mo.hi.now ? t('todayT') : dayLabel(mo.hi.d)) : '') +
-      tile('gdLow', mo ? '\u20AC' + money(mo.lo.v, dp) : '–', mo ? (mo.lo.now ? t('todayT') : dayLabel(mo.lo.d)) : '') +
-      tile('gdAvg', mo ? '\u20AC' + money(mo.avg, dp) : '–', mo ? fmt(t('gdRange'), money((mo.hi.v - mo.lo.v) / mo.lo.v * 100, 1)) : '') +
-      '</div>';
-    var chart = '<div class="gd-sec gd-sec1">' + esc(t('gdLastMonth')) + '</div>' + (mo ? goldChart(mo) : '<div class="gd-chart none scr-note small">' + esc(t('gdNoHist')) + '</div>');
-    return hero + det + chart + goldNews() + '<div class="gd-src">' + esc(fmt(t('gdSrc'), (metalsData && metalsData.at) ? hhmm(metalsData.at) : '–')) + '</div>';
-  }
-  function goldNews() {
-    return '<div class="gd-sec gd-sec2">' + esc(t('gdNews')) + '</div><div class="gd-news">' + GOLD_NEWS.map(function (n, i) {
-      return '<div class="gd-n"><div class="gd-qr" id="gd-qr' + i + '"></div><div class="gd-nt"><div class="gd-nn">' + esc(n.name) + '</div><div class="gd-nh">' + esc(n.host) + '</div><div class="gd-nd">' + esc(t(n.k)) + '</div></div></div>';
-    }).join('') + '</div>';
-  }
-  function goldQrs() {
-    if (!window.qrcode) { return; }
-    GOLD_NEWS.forEach(function (n, i) {
-      var el = $('gd-qr' + i);
-      if (!el) { return; }
-      try { var q = window.qrcode(0, 'M'); q.addData(n.url); q.make(); el.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); } catch (e) { el.innerHTML = ''; }
-    });
-  }
-  function goldWeekRow(o) {
-    var w = goldWeek(o);
-    if (!w) { return ''; }
-    var up = w.chg >= 0, dp = o.g >= 10 ? 2 : 3;
-    return '<div class="mw">' +
-      '<div class="mw-a"><div class="mw-k">' + esc(t('mtWeek')) + '</div>' +
-      '<div class="mw-v ' + (up ? 'up' : 'dn') + '">' + (up ? '▲ +' : '▼ −') + money(Math.abs(w.chg), dp) + '</div>' +
-      '<div class="mw-p">' + (up ? '+' : '−') + money(Math.abs(w.pct), 2) + '% ' + esc(t('mtWeekSfx')) + '</div></div>' +
-      weekChart(w) + '</div>';
-  }
   function renderMetals() {
     var box = $('mt'), d = metalsData, im = $('idle-mt');
     if (!box) { return; }
@@ -1276,19 +1114,14 @@
       return '<div class="mt-row ' + k + '">' + ingot(k) +
         '<div class="mt-a"><div class="mt-k">' + esc(t(k === 'gold' ? 'mtGold' : 'mtSilver')) + '</div><div class="mt-p">€' + (o.g ? money(o.g, dp) : '—') + '<span class="mt-u">/g</span></div></div>' +
         '<div class="mt-c ' + (has ? (up ? 'up' : 'dn') : '') + '">' + (has ? '<div class="mt-cv">' + (up ? '▲ +' : '▼ −') + money(Math.abs(o.chg || 0), dp) + '</div><div class="mt-cp">' + (up ? '+' : '−') + money(Math.abs(o.pct), 2) + '% ' + esc(t('mtToday')) + '</div>' : '') + '</div>' +
-        '<div class="mt-s">' + spark(hist, k) + '<div class="mt-sk">' + esc(t('mt30')) + '</div></div></div>' +
-        (k === 'gold' ? goldWeekRow(o) : '');
+        '<div class="mt-s">' + spark(hist, k) + '<div class="mt-sk">' + esc(t('mt30')) + '</div></div></div>';
     }).join('');
-    fitRcol();
   }
   function loadMetals() {
     if (!ON_TV) {
       var gh = [], sh = [], i;
       for (i = 0; i < 29; i++) { gh.push(108 + Math.sin(i / 4) * 1.6 + i * 0.12); sh.push(1.30 + Math.cos(i / 5) * 0.03 + i * 0.001); }
-      var gd = [];
-      for (i = 95; i >= 1; i--) { var dd = new Date(dayStart(-i)); if (dd.getDay() % 6) { gd.push({ d: isoDay(dd.getTime()), v: Math.round((106.4 + Math.sin(i / 6) * 2.1 + (95 - i) * 0.055 + Math.cos(i * 1.7) * 0.5) * 100) / 100 }); } }
-      gd = gd.slice(-70);
-      metalsData = { at: Date.now(), gold: { g: 112.46, pct: 0.62, chg: 0.69, hist: gh, days: gd }, silver: { g: 1.342, pct: -0.41, chg: -0.006, hist: sh } };
+      metalsData = { at: Date.now(), gold: { g: 112.46, pct: 0.62, chg: 0.69, hist: gh }, silver: { g: 1.342, pct: -0.41, chg: -0.006, hist: sh } };
       renderMetals(); return;
     }
     callService('/metals', function (r) {

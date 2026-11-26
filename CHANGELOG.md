@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.12 — 2026-11-26
+Back to 0.7.10, at Ričards's request: the gold "this week" block, the Gold screen and the `/metals` history changes from 0.7.11 are removed. The hub is identical to 0.7.10 apart from the version number (so the TV no longer offers 0.7.11 as an update).
+
 ## 0.7.11 — 2026-11-26
 Gold: a "this week" chart on the home screen and a new Gold screen.
 - Home: under the gold price, the change over the last 7 days (€ and %) and a small chart with one point per trading day, day names underneath and a dashed line at last week's price. Silver and the 30-day lines are unchanged.
