@@ -705,6 +705,20 @@ html, body { background: #011815; }
 .mt-sp.none { height: 40px; }
 .mt-sk { position: absolute; right: 0; bottom: -13px; font-size: 11px; letter-spacing: 1px; color: var(--sage); opacity: .8; }
 
+/* 0.7.11 Gold this week: change in 7 days + daily closes, under the gold row */
+.mw { position: relative; height: 84px; border-bottom: 1px solid rgba(235,180,44,.12); }
+.mw-a { position: absolute; left: 68px; top: 9px; width: 160px; }
+.mw-k { font-size: 13px; font-weight: 700; letter-spacing: 3px; color: var(--gold); line-height: 16px; white-space: nowrap; }
+.mw-v { font-size: 21px; font-weight: 700; line-height: 28px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mw-v.up { color: #7CC4A4; }
+.mw-v.dn { color: #E8907A; }
+.mw-p { font-size: 14px; line-height: 18px; color: var(--sage); white-space: nowrap; }
+.mw-c { position: absolute; right: 0; top: 6px; width: 282px; height: 76px; }
+.mw-g { display: block; width: 282px; height: 58px; }
+.mw-ls { position: relative; height: 16px; }
+.mw-l { position: absolute; top: 2px; width: 40px; margin-left: -20px; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--sage); text-transform: uppercase; opacity: .85; }
+.mw-l.now { color: var(--gold); opacity: 1; }
+
 /* 0.7.8 Idle: gold and silver price per gram under the watch (no change, no chart) */
 .idle-mt { position: absolute; left: 230px; top: 868px; width: 800px; text-align: center; opacity: 0; transition: opacity .8s ease; white-space: nowrap; }
 .stage.idle .idle-mt { opacity: 1; }
@@ -723,3 +737,35 @@ html, body { background: #011815; }
 
 /* 0.7.10: the playing equaliser stops animating while hidden behind the idle screen (saves constant repaints) */
 .stage.idle .qp.on .qp-eq i { -webkit-animation: none; animation: none; }
+
+/* 0.7.11 Gold screen: hero + six stat tiles (same layout as Weather), last month chart, three news sites with QR */
+.scr-gold { top: 252px; }
+.gd { position: relative; width: 1728px; height: 772px; }
+.gd-hero { position: absolute; left: 0; top: 18px; display: flex; align-items: center; }
+.gd-hero .mt-ig { width: 120px; height: 80px; margin-right: 32px; }
+.gd-k { font-size: 19px; font-weight: 700; letter-spacing: 4px; color: var(--gold); line-height: 24px; }
+.gd-p { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 112px; line-height: 120px; font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+.gd-u { font-family: Manrope, sans-serif; font-size: 30px; font-weight: 600; color: var(--sage); margin-left: 6px; }
+.gd-today { font-size: 26px; font-weight: 700; line-height: 34px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gd-today span { font-weight: 500; color: var(--sage); }
+.gd-today.up, .wd-v.up { color: #7CC4A4; }
+.gd-today.dn, .wd-v.dn { color: #E8907A; }
+.gd-det { top: 0; }
+.gd-t .wd-k { letter-spacing: 1px; }
+.gd-t .wd-v small { margin-left: 4px; }
+.gd-sec { position: absolute; left: 0; font-size: 18px; line-height: 24px; font-weight: 700; letter-spacing: 4px; color: var(--gold); }
+.gd-sec1 { top: 262px; }
+.gd-chart { position: absolute; left: 0; top: 296px; width: 1728px; height: 210px; }
+.gd-chart.none { height: auto; }
+.gd-sec2 { top: 534px; }
+.gd-news { position: absolute; left: 0; top: 570px; width: 1728px; display: flex; }
+.gd-n { width: 560px; height: 156px; margin-right: 24px; box-sizing: border-box; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: rgba(11,58,53,.7); display: flex; align-items: center; }
+.gd-n:last-child { margin-right: 0; }
+.gd-qr { flex: none; width: 124px; height: 124px; border-radius: 10px; background: #F4F2EC; overflow: hidden; margin-right: 24px; }
+.gd-qr svg { display: block; width: 124px; height: 124px; }
+.gd-nt { min-width: 0; }
+.gd-nn { font-size: 28px; font-weight: 700; line-height: 36px; white-space: nowrap; }
+.gd-nh { font-size: 19px; font-weight: 700; line-height: 26px; color: var(--gold); }
+.gd-nd { margin-top: 4px; font-size: 17px; line-height: 22px; color: var(--sage); }
+.gd-src { position: absolute; right: 0; top: 742px; font-size: 15px; color: var(--sage); opacity: .8; }
+.rm-tight .rmi { height: 96px; margin-bottom: 8px; }

@@ -33,7 +33,7 @@ var fs = require('fs');
 var crypto = require('crypto');
 var net = require('net');
 
-var VERSION = '0.7.10';
+var VERSION = '0.7.11';
 var REPO = 'RichGreenwood/greenwood-tv-hub';
 var TB_CFG = '/home/owner/share/tizenbrewConfig.json';
 var TB_BACKUP = '/home/owner/share/tizenbrewConfig.greenwood-backup.json';
@@ -846,6 +846,8 @@ function metalsLoad(cb) {
       if (y && y.price && y.prev) { o.pct = (y.price / y.prev - 1) * 100; o.base = 'prev close'; }
       if (y && y.days.length && metals.histFx) {
         o.hist = y.days.map(function (p) { var f = metals.histFx[rigaDay(p.t)] || fx; return f ? Math.round(p.v / OZ_G / f * 100) / 100 : 0; }).filter(function (v) { return v > 0; }).slice(-30);
+        /* 0.7.11: gold closes with their Riga date (about 3 months) for the "this week" chart and the Gold screen */
+        if (k === 'gold') { o.days = y.days.slice(-70).map(function (p) { var d = rigaDay(p.t), f = metals.histFx[d] || fx; return { d: d, v: f ? Math.round(p.v / OZ_G / f * 1000) / 1000 : 0 }; }).filter(function (p) { return p.v > 0; }); }
       }
       delete o.usd; delete o.alt;
     });
@@ -875,17 +877,17 @@ function metalsLoad(cb) {
       });
     });
   });
-  /* Yahoo: today's change and 30 days */
-  var range = !metals.histAt || Date.now() - metals.histAt > 6 * 3600000 ? '1mo' : '5d';
+  /* Yahoo: today's change and history (3 months every 6 hours, otherwise the last 5 days) */
+  var range = !metals.histAt || Date.now() - metals.histAt > 6 * 3600000 ? '3mo' : '5d';
   ['gold', 'silver'].forEach(function (k) {
     yahoo(ysym[k], range, function (err, y) {
       if (err) { errs.push('yahoo ' + ysym[k] + ' ' + err); }
       else {
-        if (range === '1mo') { (metals.histY = metals.histY || {})[k] = y.days; }
+        if (range === '3mo') { (metals.histY = metals.histY || {})[k] = y.days; }
         else if (metals.histY && metals.histY[k]) {
           /* refresh the newest days, keep the older ones */
           var old = metals.histY[k].filter(function (p) { return rigaDay(p.t) < rigaDay(y.days.length ? y.days[0].t : Date.now()); });
-          metals.histY[k] = old.concat(y.days).slice(-30);
+          metals.histY[k] = old.concat(y.days).slice(-70);
         }
         y.days = (metals.histY && metals.histY[k]) || y.days;
         yq[k] = y; out.src.push('Yahoo ' + ysym[k]);
@@ -897,7 +899,7 @@ function metalsLoad(cb) {
   yahoo('EURUSD=X', range, function (err, y) {
     if (!err && y.price) {
       out.fx = y.price;
-      if (range === '1mo') { metals.histFx = {}; metals.histAt = Date.now(); }
+      if (range === '3mo') { metals.histFx = {}; metals.histAt = Date.now(); }
       metals.histFx = metals.histFx || {};
       y.days.forEach(function (p) { metals.histFx[rigaDay(p.t)] = p.v; });
       step(); return;

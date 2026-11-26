@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.11 — 2026-11-26
+Gold: a "this week" chart on the home screen and a new Gold screen.
+- Home: under the gold price, the change over the last 7 days (€ and %) and a small chart with one point per trading day, day names underneath and a dashed line at last week's price. Silver and the 30-day lines are unchanged.
+- Home: if today's meetings plus the new block would reach the Watch row, the right column moves up (never past the date); otherwise it stays where it was.
+- New Gold screen (Screens menu, after Daylight): price per gram and today's change; 1 month and 1 week change, price per troy ounce, the month's high, low and average; a chart of the last month; three news sites (Kitco News, Reuters, World Gold Council) with QR codes to open them on a phone. English, Latviešu, Français.
+- Screens menu: rows slightly tighter when there are 8 or more items.
+- Helper: `/metals` now also returns dated gold closes (`gold.days`, about 3 months). Yahoo history is fetched as 3 months every 6 hours (was 1 month); same sources as before.
+
 ## 0.7.10 — 2026-11-07
 Stability release: nothing looks different, but the hub should no longer slow down, freeze or lose its helper after days on screen.
 - TV info: the processor/memory check kept running after Back, one more loop for every visit, even in idle and night view. It now stops when you leave.
